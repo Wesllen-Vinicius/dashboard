@@ -8,10 +8,13 @@ import {
     sendPasswordResetEmail,
     EmailAuthProvider,
     reauthenticateWithCredential,
+    onAuthStateChanged,
+    User,
 } from 'firebase/auth';
 import { LoginValues } from '@/lib/schemas';
 
-export const signInWithEmail = async ({ email, password }: LoginValues) => {
+// CORREÇÃO: A função agora aceita dois argumentos de string, em vez de um objeto.
+export const login = async (email: string, password: string) => {
     return signInWithEmailAndPassword(auth, email, password);
 };
 
@@ -20,7 +23,7 @@ export const signInWithGoogle = async () => {
     return signInWithPopup(auth, provider);
 };
 
-export const signOutUser = async () => {
+export const logout = async () => {
     return signOut(auth);
 };
 
@@ -40,15 +43,18 @@ export const createUserInAuth = async (email: string, password: string): Promise
     }
 };
 
-export const sendPasswordReset = async (email: string) => {
+export const resetPassword = async (email: string) => {
     return sendPasswordResetEmail(auth, email);
 };
 
-// --- NOVA FUNÇÃO ADICIONADA ---
 export const reauthenticateUser = async (password: string) => {
     const user = auth.currentUser;
     if (!user || !user.email) throw new Error("Usuário não encontrado ou sem e-mail associado.");
 
     const credential = EmailAuthProvider.credential(user.email, password);
     await reauthenticateWithCredential(user, credential);
-}
+};
+
+export const onAuthChanged = (callback: (user: User | null) => void) => {
+  return onAuthStateChanged(auth, callback);
+};

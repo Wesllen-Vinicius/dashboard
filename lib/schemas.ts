@@ -9,6 +9,14 @@ export const loginSchema = z.object({
 });
 export type LoginValues = z.infer<typeof loginSchema>;
 
+// ADICIONE ESTES DOIS (SCHEMA E TIPO) AQUI
+export const userInfoSchema = z.object({
+  uid: z.string(),
+  nome: z.string(),
+  role: z.enum(['ADMINISTRADOR', 'USUARIO']).optional(),
+});
+export type UserInfo = z.infer<typeof userInfoSchema>;
+
 export const userSchema = z.object({
   uid: z.string(),
   displayName: z.string().min(1, "O nome de exibição é obrigatório."),

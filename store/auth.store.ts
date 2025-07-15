@@ -1,63 +1,33 @@
-// store/auth.store.ts
-"use client";
-
 import { create } from 'zustand';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { User } from 'firebase/auth';
+import { onAuthChanged, logout as signOutService } from '@/lib/services/auth.services';
 import { useDataStore } from './data.store';
 
 interface AuthState {
   user: User | null;
-  role: 'ADMINISTRADOR' | 'USUARIO' | null;
   isLoading: boolean;
   initializeAuthListener: () => () => void;
-  authUnsubscribe: (() => void) | null;
-  firestoreUnsubscribe: (() => void) | null;
+  logout: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  role: null,
-  isLoading: true, // Começa como true por padrão
-  authUnsubscribe: null,
-  firestoreUnsubscribe: null,
-
+  isLoading: true,
   initializeAuthListener: () => {
-    if (get().authUnsubscribe) return () => {};
-
-    const authUnsubscribe = onAuthStateChanged(auth, (user) => {
-      get().firestoreUnsubscribe?.(); // Limpa o listener anterior do firestore
-
+    const unsubscribe = onAuthChanged((user) => {
+      set({ user, isLoading: false });
       if (user) {
-        const userDocRef = doc(db, 'users', user.uid);
-
-        const firestoreUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
-          if (docSnap.exists()) {
-            const userData = docSnap.data();
-            // **Ponto chave:** Atualiza user, role e finaliza o loading JUNTOS
-            set({ user, role: userData.role, isLoading: false });
-          } else {
-            // Documento não existe, mas a verificação terminou
-            set({ user, role: null, isLoading: false });
-          }
-          // Inicializa os outros dados da aplicação após a role ser definida
-          useDataStore.getState().initializeSubscribers();
-        }, (error) => {
-            console.error("Erro ao observar o documento do usuário:", error);
-            set({ user, role: null, isLoading: false });
-        });
-
-        set({ firestoreUnsubscribe });
-
+        // Se o usuário está logado, inicia os listeners de dados.
+        useDataStore.getState().initializeSubscribers();
       } else {
-        // Usuário deslogado, verificação concluída
-        set({ user: null, role: null, isLoading: false, firestoreUnsubscribe: null });
+        // Se o usuário fez logout ou não está logado, limpa os listeners e os dados.
         useDataStore.getState().clearSubscribers();
       }
     });
-
-    set({ authUnsubscribe });
-    return authUnsubscribe;
+    return unsubscribe; // Retorna a função de cleanup do listener de autenticação
+  },
+  logout: async () => {
+    await signOutService();
+    set({ user: null });
   },
 }));
