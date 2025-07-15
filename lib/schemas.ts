@@ -24,6 +24,7 @@ export const userSchema = z.object({
   role: z.enum(['ADMINISTRADOR', 'USUARIO']),
   password: z.string().min(6, "A senha deve ter no mínimo 6 caracteres.").optional().or(z.literal('')),
   status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
+  dashboardLayout: z.array(z.string()).optional(), 
 });
 export type SystemUser = z.infer<typeof userSchema>;
 

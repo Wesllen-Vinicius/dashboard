@@ -1,16 +1,20 @@
 import { IconUsersGroup, IconShoppingCart, IconBox, IconUsers, IconTrendingUp, IconFileDollar, IconCashBanknote } from "@tabler/icons-react";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
+// 1. Definição e exportação do tipo Stats
+export interface Stats {
+  totalFuncionarios: number;
+  totalProdutos: number;
+  totalClientes: number;
+  totalVendasMes: number;
+  lucroBrutoMes: number;
+  totalAPagar: number;
+  totalAReceber: number;
+}
+
+// 2. A interface de propriedades agora usa o tipo exportado
 interface SectionCardsProps {
-  stats: {
-    totalFuncionarios: number;
-    totalProdutos: number;
-    totalClientes: number;
-    totalVendasMes: number;
-    lucroBrutoMes: number;
-    totalAPagar: number;
-    totalAReceber: number;
-  };
+  stats: Stats;
 }
 
 export function SectionCards({ stats }: SectionCardsProps) {
