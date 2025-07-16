@@ -1,29 +1,10 @@
-import { db } from "@/lib/firebase";
-import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, QuerySnapshot, DocumentData, serverTimestamp, query, where } from "firebase/firestore";
-import { Cargo } from "@/lib/schemas";
+import { db } from "../firebase";
+import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp } from "firebase/firestore";
+import { Cargo } from "../schemas";
 
 export const addCargo = async (cargo: Omit<Cargo, 'id' | 'createdAt' | 'status'>) => {
-  try {
-    const dataWithTimestamp = { ...cargo, status: 'ativo', createdAt: serverTimestamp() };
-    const docRef = await addDoc(collection(db, "cargos"), dataWithTimestamp);
-    return docRef.id;
-  } catch (e) {
-    console.error("Erro ao adicionar cargo: ", e);
-    throw new Error("Não foi possível adicionar o cargo.");
-  }
-};
-
-export const subscribeToCargos = (callback: (cargos: Cargo[]) => void) => {
-  const q = query(collection(db, "cargos"), where("status", "==", "ativo"));
-
-  const unsubscribe = onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    const cargos: Cargo[] = [];
-    querySnapshot.forEach((doc) => {
-      cargos.push({ id: doc.id, ...doc.data() as Omit<Cargo, 'id'> });
-    });
-    callback(cargos);
-  });
-  return unsubscribe;
+  const dataWithTimestamp = { ...cargo, status: 'ativo', createdAt: serverTimestamp() };
+  await addDoc(collection(db, "cargos"), dataWithTimestamp);
 };
 
 export const updateCargo = async (id: string, cargo: Partial<Omit<Cargo, 'id' | 'createdAt' | 'status'>>) => {
@@ -31,8 +12,27 @@ export const updateCargo = async (id: string, cargo: Partial<Omit<Cargo, 'id' | 
   await updateDoc(cargoDoc, cargo);
 };
 
-// Nova função para inativar um cargo
 export const setCargoStatus = async (id: string, status: 'ativo' | 'inativo') => {
-    const cargoDoc = doc(db, "cargos", id);
-    await updateDoc(cargoDoc, { status });
+  const cargoRef = doc(db, "cargos", id);
+  await updateDoc(cargoRef, { status });
+};
+
+export const subscribeToCargos = (
+  callback: (cargos: Cargo[]) => void,
+  showAll: boolean = false
+) => {
+  const q = showAll
+    ? query(collection(db, "cargos"))
+    : query(collection(db, "cargos"), where("status", "==", "ativo"));
+
+  return onSnapshot(q, (querySnapshot) => {
+    const cargosData: Cargo[] = [];
+    querySnapshot.forEach((doc) => {
+      cargosData.push({ id: doc.id, ...doc.data() } as Cargo);
+    });
+    callback(cargosData.sort((a, b) => {
+      if (a.status === b.status) return 0;
+      return a.status === 'ativo' ? -1 : 1;
+    }));
+  });
 };

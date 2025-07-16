@@ -13,11 +13,14 @@ interface CompraActionsProps {
 
 export function CompraActions({ dateRange, onDateChange, onNewCompra }: CompraActionsProps) {
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-      <h1 className="text-2xl font-bold tracking-tight">Gerenciamento de Compras</h1>
-      <div className="flex items-center gap-2">
+    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <h1 className="text-2xl font-bold tracking-tight shrink-0">
+        Gerenciamento de Compras
+      </h1>
+
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full sm:w-auto sm:justify-end">
         <DateRangePicker date={dateRange} onDateChange={onDateChange} />
-        <Button onClick={onNewCompra}>
+        <Button onClick={onNewCompra} className="w-full sm:w-auto">
           <IconPlus className="mr-2 h-4 w-4" />
           Registrar Compra
         </Button>
