@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidCnpj, isValidCpf } from "./validators";
 
 // =================================================================
 // Schemas Base e de Autenticação
@@ -24,7 +25,7 @@ export const userSchema = z.object({
   role: z.enum(['ADMINISTRADOR', 'USUARIO']),
   password: z.string().min(6, "A senha deve ter no mínimo 6 caracteres.").optional().or(z.literal('')),
   status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
-  dashboardLayout: z.array(z.string()).optional(), 
+  dashboardLayout: z.array(z.string()).optional(),
 });
 export type SystemUser = z.infer<typeof userSchema>;
 
@@ -51,21 +52,6 @@ export const IndicadorIEDestinatario = z.enum([
     "9", // Não Contribuinte
 ]);
 
-export const clienteSchema = z.object({
-  id: z.string().optional(),
-  nome: z.string().min(3, "O nome deve ter pelo menos 3 caracteres."),
-  tipoPessoa: z.enum(["fisica", "juridica"], { required_error: "Selecione o tipo de pessoa." }),
-  documento: z.string().min(11, "O CPF/CNPJ é obrigatório."),
-  inscricaoEstadual: z.string().optional().or(z.literal("")),
-  indicadorInscricaoEstadual: IndicadorIEDestinatario.default("9"),
-  telefone: z.string().min(10, "O telefone é obrigatório."),
-  email: z.string().email("O e-mail é obrigatório e deve ser válido."),
-  endereco: enderecoSchema,
-  createdAt: z.any().optional(),
-  status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
-});
-export type Cliente = z.infer<typeof clienteSchema>;
-
 const dadosBancariosSchema = z.object({
   banco: z.string().min(1, "O nome do banco é obrigatório."),
   agencia: z.string().min(1, "A agência é obrigatória."),
@@ -73,17 +59,7 @@ const dadosBancariosSchema = z.object({
   pix: z.string().optional().or(z.literal("")),
 });
 
-export const fornecedorSchema = z.object({
-  id: z.string().optional(),
-  razaoSocial: z.string().min(3, "A Razão Social é obrigatória."),
-  cnpj: z.string().length(18, "O CNPJ deve ter 14 dígitos."),
-  contato: z.string().min(10, "O telefone de contato é obrigatório."),
-  endereco: enderecoSchema,
-  dadosBancarios: dadosBancariosSchema,
-  createdAt: z.any().optional(),
-  status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
-});
-export type Fornecedor = z.infer<typeof fornecedorSchema>;
+
 
 export const cargoSchema = z.object({
   id: z.string().optional(),
@@ -308,21 +284,6 @@ export const movimentacaoSchema = z.object({
 });
 export type Movimentacao = z.infer<typeof movimentacaoSchema>;
 
-export const contaBancariaSchema = z.object({
-  id: z.string().optional(),
-  nomeConta: z.string().min(3, "O nome da conta é obrigatório."),
-  banco: z.string().min(2, "O nome do banco é obrigatório."),
-  agencia: z.string().optional(),
-  conta: z.string().optional(),
-  tipo: z.enum(["Conta Corrente", "Conta Poupança", "Caixa"]),
-  saldoInicial: z.coerce.number().optional(),
-  saldoAtual: z.coerce.number().optional(),
-  registradoPor: z.object({ uid: z.string(), nome: z.string(), }).optional(),
-  createdAt: z.any().optional(),
-  status: z.enum(['ativa', 'inativa']).default('ativa').optional(),
-});
-export type ContaBancaria = z.infer<typeof contaBancariaSchema>;
-
 export const contaAReceberSchema = z.object({
   id: z.string(),
   vendaId: z.string(),
@@ -396,3 +357,124 @@ export const roleSchema = z.object({
 });
 
 export type Role = z.infer<typeof roleSchema>;
+export const contaBancariaSchema = z.object({
+  id: z.string().optional(),
+  nomeConta: z.string().min(3, "O nome da conta é obrigatório."),
+  banco: z.string().min(1, "A seleção do banco é obrigatória."),
+  agencia: z.string().optional(),
+  conta: z.string().optional(),
+  tipo: z.enum(["Conta Corrente", "Conta Poupança", "Caixa"]),
+  saldoInicial: z.coerce.number().optional(),
+  saldoAtual: z.coerce.number().optional(),
+  status: z.enum(["ativa", "inativa"]),
+  registradoPor: z.object({
+    uid: z.string(),
+    nome: z.string(),
+  }).optional(),
+  createdAt: z.any().optional(),
+});
+
+// Este é o schema corrigido para o formulário. Ele será a única fonte de verdade.
+export const ContaBancariaFormSchema = contaBancariaSchema.pick({
+    nomeConta: true,
+    banco: true,
+    agencia: true,
+    conta: true,
+    tipo: true,
+}).extend({
+    // Garante que saldoInicial seja um número requerido para o formulário.
+    saldoInicial: z.coerce.number({ required_error: "O saldo inicial é obrigatório." }),
+});
+
+export type ContaBancaria = z.infer<typeof contaBancariaSchema>;
+
+
+// SUBSTITUA/ADICIONE ESTE BLOCO INTEIRO
+export const fornecedorSchema = z.object({
+  id: z.string().optional(),
+  status: z.enum(["ativo", "inativo"]),
+  tipoPessoa: z.enum(["juridica", "fisica"]),
+  // **CORREÇÃO:** Usa as funções corretas na validação.
+  cpfCnpj: z.string().refine((val) => isValidCpf(val) || isValidCnpj(val), "CPF/CNPJ inválido."),
+  nomeRazaoSocial: z.string().min(3, "Nome ou Razão Social é obrigatório."),
+  nomeFantasia: z.string().optional(),
+  inscricaoEstadual: z.string().optional(),
+  email: z.string().email("E-mail inválido.").optional().or(z.literal('')),
+  telefone: z.string().optional(),
+  endereco: z.object({
+    cep: z.string().optional(),
+    logradouro: z.string().optional(),
+    numero: z.string().optional(),
+    complemento: z.string().optional(),
+    bairro: z.string().optional(),
+    cidade: z.string().optional(),
+    uf: z.string().optional(),
+  }).optional(),
+  banco: z.object({
+    nome: z.string().optional(),
+    agencia: z.string().optional(),
+    conta: z.string().optional(),
+    pix: z.string().optional(),
+  }).optional(),
+  registradoPor: z.object({
+    uid: z.string(),
+    nome: z.string(),
+  }).optional(),
+  createdAt: z.any().optional(),
+});
+
+export const FornecedorFormSchema = fornecedorSchema.pick({
+    tipoPessoa: true,
+    cpfCnpj: true,
+    nomeRazaoSocial: true,
+    nomeFantasia: true,
+    inscricaoEstadual: true,
+    email: true,
+    telefone: true,
+    endereco: true,
+    banco: true,
+});
+
+export type Fornecedor = z.infer<typeof fornecedorSchema>;
+
+
+
+
+export const clienteSchema = z.object({
+  id: z.string().optional(),
+  status: z.enum(["ativo", "inativo"]),
+  tipoPessoa: z.enum(["juridica", "fisica"]),
+  cpfCnpj: z.string().refine((val) => isValidCpf(val) || isValidCnpj(val), "CPF/CNPJ inválido."),
+  nomeRazaoSocial: z.string().min(3, "Nome ou Razão Social é obrigatório."),
+  nomeFantasia: z.string().optional(),
+  inscricaoEstadual: z.string().optional(),
+  email: z.string().email("E-mail inválido.").optional().or(z.literal('')),
+  telefone: z.string().optional(),
+  endereco: z.object({
+    cep: z.string().optional(),
+    logradouro: z.string().optional(),
+    numero: z.string().optional(),
+    complemento: z.string().optional(),
+    bairro: z.string().optional(),
+    cidade: z.string().optional(),
+    uf: z.string().optional(),
+  }).optional(),
+  registradoPor: z.object({
+    uid: z.string(),
+    nome: z.string(),
+  }).optional(),
+  createdAt: z.any().optional(),
+});
+
+export const ClienteFormSchema = clienteSchema.pick({
+    tipoPessoa: true,
+    cpfCnpj: true,
+    nomeRazaoSocial: true,
+    nomeFantasia: true,
+    inscricaoEstadual: true,
+    email: true,
+    telefone: true,
+    endereco: true,
+});
+
+export type Cliente = z.infer<typeof clienteSchema>;

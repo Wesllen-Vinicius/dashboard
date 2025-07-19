@@ -1,4 +1,5 @@
 // lib/services/brasilapi.services.ts
+
 import axios from "axios";
 
 // Interfaces para tipar as respostas
@@ -33,8 +34,19 @@ interface MunicipioData {
  * Busca dados de um CNPJ na BrasilAPI.
  */
 export async function fetchCnpjData(cnpj: string): Promise<CnpjData> {
+  // **A CORREÇÃO DEFINITIVA ESTÁ AQUI**
+  // A função agora é responsável por limpar e validar o CNPJ que recebe.
+  const cleanedCnpj = (cnpj || "").replace(/\D/g, "");
+
+  // Se, após a limpeza, o CNPJ não tiver 14 dígitos, a função retorna um erro
+  // ANTES de fazer a chamada para a API, o que evita o erro 400.
+  if (cleanedCnpj.length !== 14) {
+    return Promise.reject(new Error("O CNPJ deve conter 14 dígitos."));
+  }
+
   try {
-    const response = await axios.get(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+    // A chamada para a API agora é sempre feita com o CNPJ limpo.
+    const response = await axios.get(`https://brasilapi.com.br/api/cnpj/v1/${cleanedCnpj}`);
     if (response.status !== 200 || !response.data || !response.data.razao_social) {
         throw new Error("Resposta inválida da API. Verifique o CNPJ digitado.");
     }
@@ -52,8 +64,12 @@ export async function fetchCnpjData(cnpj: string): Promise<CnpjData> {
  * Busca dados de endereço a partir de um CEP na BrasilAPI.
  */
 export async function fetchCepData(cep: string): Promise<CepData> {
+    const cleanedCep = (cep || "").replace(/\D/g, "");
+    if (cleanedCep.length !== 8) {
+      return Promise.reject(new Error("O CEP deve conter 8 dígitos."));
+    }
     try {
-        const response = await axios.get(`https://brasilapi.com.br/api/cep/v1/${cep}`);
+        const response = await axios.get(`https://brasilapi.com.br/api/cep/v1/${cleanedCep}`);
         if (response.status !== 200 || !response.data) {
             throw new Error("Resposta inválida da API de CEP.");
         }
