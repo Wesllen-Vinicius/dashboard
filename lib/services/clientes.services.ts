@@ -1,59 +1,76 @@
-// lib/services/clientes.services.ts
-
 import { db } from "@/lib/firebase";
-import { collection, addDoc, onSnapshot, doc, updateDoc, QuerySnapshot, DocumentData, serverTimestamp, query, where } from "firebase/firestore";
-import { Cliente } from "@/lib/schemas";
+import {
+  collection,
+  addDoc,
+  onSnapshot,
+  doc,
+  updateDoc,
+  serverTimestamp,
+  query,
+  orderBy,
+  QuerySnapshot,
+  DocumentData,
+} from "firebase/firestore";
+import { z } from "zod";
+import { Cliente, ClienteFormSchema } from "@/lib/schemas";
 
-export const addCliente = async (cliente: Omit<Cliente, 'id' | 'createdAt' | 'status'>) => {
-  try {
-    const dataWithTimestamp = {
-      ...cliente,
-      status: 'ativo',
-      createdAt: serverTimestamp()
-    };
-    const docRef = await addDoc(collection(db, "clientes"), dataWithTimestamp);
-    return docRef.id;
-  } catch (e) {
-    console.error("Erro ao adicionar cliente: ", e);
-    throw new Error("Não foi possível adicionar o cliente.");
-  }
-};
+const clientesCollection = collection(db, "clientes");
 
-// **NOVA FUNÇÃO** para buscar clientes por status
-export const subscribeToClientesByStatus = (status: 'ativo' | 'inativo', callback: (clientes: Cliente[]) => void) => {
-  const q = query(collection(db, "clientes"), where("status", "==", status));
+export const subscribeToClientes = (
+  callback: (data: Cliente[]) => void,
+  showAll: boolean = false
+) => {
+  const q = query(clientesCollection, orderBy("nomeRazaoSocial"));
 
-  const unsubscribe = onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    const clientes: Cliente[] = [];
+  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
+    let data: Cliente[] = [];
     querySnapshot.forEach((doc) => {
-      clientes.push({ id: doc.id, ...doc.data() as Omit<Cliente, 'id'> });
+      data.push({ id: doc.id, ...doc.data() } as Cliente);
     });
-    callback(clientes);
+
+    if (showAll) {
+      callback(
+        data.sort((a, b) => {
+          if (a.status === 'ativo' && b.status === 'inativo') return -1;
+          if (a.status === 'inativo' && b.status === 'ativo') return 1;
+          return a.nomeRazaoSocial.localeCompare(b.nomeRazaoSocial);
+        })
+      );
+    } else {
+      const ativos = data.filter((item) => item.status === "ativo");
+      callback(ativos);
+    }
   });
-  return unsubscribe;
 };
 
-// **FUNÇÃO ANTIGA REMOVIDA** (pode ser mantida se usada em outro lugar)
-export const subscribeToClientes = (callback: (clientes: Cliente[]) => void) => {
-  const q = query(collection(db, "clientes"), where("status", "==", "ativo"));
+export const addCliente = async (
+  data: z.infer<typeof ClienteFormSchema>,
+  user: { uid: string; displayName: string | null }
+) => {
+  if (!user) throw new Error("Usuário não autenticado.");
 
-  const unsubscribe = onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    const clientes: Cliente[] = [];
-    querySnapshot.forEach((doc) => {
-      clientes.push({ id: doc.id, ...doc.data() as Omit<Cliente, 'id'> });
-    });
-    callback(clientes);
-  });
-  return unsubscribe;
+  const dataComTimestamp = {
+    ...data,
+    status: "ativo",
+    registradoPor: { uid: user.uid, nome: user.displayName || "Usuário" },
+    createdAt: serverTimestamp(),
+  };
+  const docRef = await addDoc(clientesCollection, dataComTimestamp);
+  return docRef.id;
 };
 
-
-export const updateCliente = async (id: string, cliente: Partial<Omit<Cliente, 'id' | 'createdAt' | 'status'>>) => {
-  const clienteDoc = doc(db, "clientes", id);
-  await updateDoc(clienteDoc, cliente);
+export const updateCliente = async (
+  id: string,
+  data: Partial<z.infer<typeof ClienteFormSchema>>
+) => {
+  const docRef = doc(db, "clientes", id);
+  await updateDoc(docRef, data);
 };
 
-export const setClienteStatus = async (id: string, status: 'ativo' | 'inativo') => {
-    const clienteDoc = doc(db, "clientes", id);
-    await updateDoc(clienteDoc, { status });
-}
+export const setClienteStatus = async (
+  id: string,
+  status: "ativo" | "inativo"
+) => {
+  const docRef = doc(db, "clientes", id);
+  await updateDoc(docRef, { status });
+};

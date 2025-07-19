@@ -52,21 +52,6 @@ export const IndicadorIEDestinatario = z.enum([
     "9", // Não Contribuinte
 ]);
 
-export const clienteSchema = z.object({
-  id: z.string().optional(),
-  nome: z.string().min(3, "O nome deve ter pelo menos 3 caracteres."),
-  tipoPessoa: z.enum(["fisica", "juridica"], { required_error: "Selecione o tipo de pessoa." }),
-  documento: z.string().min(11, "O CPF/CNPJ é obrigatório."),
-  inscricaoEstadual: z.string().optional().or(z.literal("")),
-  indicadorInscricaoEstadual: IndicadorIEDestinatario.default("9"),
-  telefone: z.string().min(10, "O telefone é obrigatório."),
-  email: z.string().email("O e-mail é obrigatório e deve ser válido."),
-  endereco: enderecoSchema,
-  createdAt: z.any().optional(),
-  status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
-});
-export type Cliente = z.infer<typeof clienteSchema>;
-
 const dadosBancariosSchema = z.object({
   banco: z.string().min(1, "O nome do banco é obrigatório."),
   agencia: z.string().min(1, "A agência é obrigatória."),
@@ -451,3 +436,45 @@ export const FornecedorFormSchema = fornecedorSchema.pick({
 });
 
 export type Fornecedor = z.infer<typeof fornecedorSchema>;
+
+
+
+
+export const clienteSchema = z.object({
+  id: z.string().optional(),
+  status: z.enum(["ativo", "inativo"]),
+  tipoPessoa: z.enum(["juridica", "fisica"]),
+  cpfCnpj: z.string().refine((val) => isValidCpf(val) || isValidCnpj(val), "CPF/CNPJ inválido."),
+  nomeRazaoSocial: z.string().min(3, "Nome ou Razão Social é obrigatório."),
+  nomeFantasia: z.string().optional(),
+  inscricaoEstadual: z.string().optional(),
+  email: z.string().email("E-mail inválido.").optional().or(z.literal('')),
+  telefone: z.string().optional(),
+  endereco: z.object({
+    cep: z.string().optional(),
+    logradouro: z.string().optional(),
+    numero: z.string().optional(),
+    complemento: z.string().optional(),
+    bairro: z.string().optional(),
+    cidade: z.string().optional(),
+    uf: z.string().optional(),
+  }).optional(),
+  registradoPor: z.object({
+    uid: z.string(),
+    nome: z.string(),
+  }).optional(),
+  createdAt: z.any().optional(),
+});
+
+export const ClienteFormSchema = clienteSchema.pick({
+    tipoPessoa: true,
+    cpfCnpj: true,
+    nomeRazaoSocial: true,
+    nomeFantasia: true,
+    inscricaoEstadual: true,
+    email: true,
+    telefone: true,
+    endereco: true,
+});
+
+export type Cliente = z.infer<typeof clienteSchema>;
