@@ -5,7 +5,7 @@ import { ColumnDef, Row, ExpandedState, OnChangeFn } from "@tanstack/react-table
 import { format } from "date-fns";
 import { Timestamp } from "firebase/firestore";
 import { motion } from "framer-motion";
-import { IconEdit, IconArchive, IconCheck, IconChevronDown } from "@tabler/icons-react";
+import { IconEdit, IconArchive, IconRotateClockwise, IconChevronDown, IconPencil } from "@tabler/icons-react";
 import { Cliente } from "@/lib/schemas";
 import { useAuthStore } from "@/store/auth.store";
 import { useDataStore } from "@/store/data.store";
@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { formatCpfCnpj } from "@/lib/utils/formatters";
+import { formatCpfCnpj, formatPhone } from "@/lib/utils/formatters";
 import { TruncatedCell } from "@/components/ui/truncated-cell";
 
 interface ClientesTableProps {
@@ -64,8 +64,7 @@ export function ClientesTable({
               ? format(cliente.createdAt.toDate(), "dd/MM/yyyy 'às' HH:mm:ss")
               : "N/A",
         },
-        { label: "Telefone", value: cliente.telefone || "N/A" },
-        { label: "E-mail", value: cliente.email || "N/A" },
+        { label: "Inscrição Estadual", value: cliente.inscricaoEstadual || "N/A" },
         {
           label: "Endereço",
           value: enderecoCompleto,
@@ -137,15 +136,15 @@ export function ClientesTable({
         header: "CPF/CNPJ",
         cell: ({ row }) => formatCpfCnpj(row.getValue("cpfCnpj")),
       },
+       {
+        accessorKey: "telefone",
+        header: "Telefone",
+        cell: ({ row }) => formatPhone(row.getValue("telefone")),
+      },
       {
-        header: "Cidade / UF",
-        cell: ({ row }) => (
-          <TruncatedCell>
-            {`${row.original.endereco?.cidade || "N/A"} - ${
-              row.original.endereco?.uf || "N/A"
-            }`}
-          </TruncatedCell>
-        ),
+        accessorKey: "email",
+        header: "E-mail",
+        cell: ({ row }) => <TruncatedCell>{row.getValue("email") || "N/A"}</TruncatedCell>,
       },
       {
         accessorKey: "status",
@@ -178,7 +177,7 @@ export function ClientesTable({
                           onClick={() => onEdit(item)}
                           disabled={!podeEditar}
                         >
-                          <IconEdit className="h-4 w-4" />
+                          <IconPencil className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent><p>Editar</p></TooltipContent>
@@ -207,7 +206,7 @@ export function ClientesTable({
                         onClick={() => onReactivate(item.id!)}
                         disabled={!podeEditar}
                       >
-                        <IconCheck className="h-4 w-4 text-green-500" />
+                        <IconRotateClockwise className="h-4 w-4 text-green-500" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent><p>Reativar</p></TooltipContent>

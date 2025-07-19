@@ -14,7 +14,7 @@ import {
   IconPencil,
   IconTrash,
   IconRotateClockwise,
-  IconChevronDown, // <-- NOVO ÍCONE
+  IconChevronDown,
 } from "@tabler/icons-react";
 import { Fornecedor } from "@/lib/schemas";
 import { useAuthStore } from "@/store/auth.store";
@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { formatCpfCnpj } from "@/lib/utils/formatters";
+import { formatCpfCnpj, formatPhone } from "@/lib/utils/formatters";
 import { TruncatedCell } from "@/components/ui/truncated-cell";
 
 interface FornecedoresTableProps {
@@ -71,10 +71,7 @@ export function FornecedoresTable({
       } - ${fornecedor.endereco?.uf || ""}`;
 
       const details = [
-        {
-          label: "ID do Registro",
-          value: fornecedor.id,
-        },
+        { label: "ID do Registro", value: fornecedor.id },
         {
           label: "Data/Hora de Criação",
           value:
@@ -82,13 +79,16 @@ export function FornecedoresTable({
               ? format(fornecedor.createdAt.toDate(), "dd/MM/yyyy 'às' HH:mm:ss")
               : "N/A",
         },
-        { label: "Telefone", value: fornecedor.telefone || "N/A" },
-        { label: "E-mail", value: fornecedor.email || "N/A" },
+        { label: "Inscrição Estadual", value: fornecedor.inscricaoEstadual || "N/A" },
         {
           label: "Endereço",
           value: enderecoCompleto,
           className: "col-span-1 sm:col-span-2 whitespace-normal break-words",
         },
+        { label: "Banco", value: fornecedor.banco?.nome || "N/A" },
+        { label: "Agência", value: fornecedor.banco?.agencia || "N/A" },
+        { label: "Conta", value: fornecedor.banco?.conta || "N/A" },
+        { label: "Chave PIX", value: fornecedor.banco?.pix || "N/A" },
       ];
       return <DetailsSubRow details={details} />;
     },
@@ -111,7 +111,6 @@ export function FornecedoresTable({
                     size="icon"
                     onClick={row.getToggleExpandedHandler()}
                   >
-                    {/* **CORREÇÃO DO ÍCONE E ANIMAÇÃO** */}
                     <IconChevronDown
                       className={cn(
                         "h-4 w-4 transition-transform duration-200",
@@ -120,7 +119,6 @@ export function FornecedoresTable({
                     />
                   </Button>
                 </TooltipTrigger>
-                {/* **CORREÇÃO DO POSICIONAMENTO DO TOOLTIP** */}
                 <TooltipContent side="right" align="center">
                   <p>{isExpanded ? "Ocultar Detalhes" : "Ver Detalhes"}</p>
                 </TooltipContent>
@@ -158,14 +156,14 @@ export function FornecedoresTable({
         cell: ({ row }) => formatCpfCnpj(row.getValue("cpfCnpj")),
       },
       {
-        header: "Cidade / UF",
-        cell: ({ row }) => (
-          <TruncatedCell>
-            {`${row.original.endereco?.cidade || "N/A"} - ${
-              row.original.endereco?.uf || "N/A"
-            }`}
-          </TruncatedCell>
-        ),
+        accessorKey: "telefone",
+        header: "Telefone",
+        cell: ({ row }) => formatPhone(row.getValue("telefone")),
+      },
+      {
+        accessorKey: "email",
+        header: "E-mail",
+        cell: ({ row }) => <TruncatedCell>{row.getValue("email") || "N/A"}</TruncatedCell>,
       },
       {
         accessorKey: "status",
