@@ -1,52 +1,79 @@
-// lib/services/fornecedores.services.ts
 import { db } from "@/lib/firebase";
-import { collection, addDoc, onSnapshot, doc, updateDoc, QuerySnapshot, DocumentData, serverTimestamp, query, where } from "firebase/firestore";
-import { Fornecedor } from "@/lib/schemas";
+import {
+  collection,
+  addDoc,
+  onSnapshot,
+  doc,
+  updateDoc,
+  serverTimestamp,
+  query,
+  orderBy,
+  QuerySnapshot,
+  DocumentData,
+} from "firebase/firestore";
+import { z } from "zod";
+import { Fornecedor, FornecedorFormSchema } from "@/lib/schemas";
 
-export const addFornecedor = async (fornecedor: Omit<Fornecedor, 'id' | 'createdAt' | 'status'>) => {
-  try {
-    const dataWithTimestamp = { ...fornecedor, status: 'ativo', createdAt: serverTimestamp() };
-    const docRef = await addDoc(collection(db, "fornecedores"), dataWithTimestamp);
-    return docRef.id;
-  } catch (e) {
-    console.error("Erro ao adicionar fornecedor: ", e);
-    throw new Error("Não foi possível adicionar o fornecedor.");
-  }
-};
+const fornecedoresCollection = collection(db, "fornecedores");
 
-// **NOVA FUNÇÃO** para buscar fornecedores por status
-export const subscribeToFornecedoresByStatus = (status: 'ativo' | 'inativo', callback: (fornecedores: Fornecedor[]) => void) => {
-  const q = query(collection(db, "fornecedores"), where("status", "==", status));
+export const subscribeToFornecedores = (
+  callback: (data: Fornecedor[]) => void,
+  showAll: boolean = false
+) => {
+  const q = query(fornecedoresCollection, orderBy("nomeRazaoSocial"));
 
   return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    const fornecedores: Fornecedor[] = [];
+    let data: Fornecedor[] = [];
     querySnapshot.forEach((doc) => {
-      fornecedores.push({ id: doc.id, ...doc.data() as Omit<Fornecedor, 'id'> });
+      data.push({ id: doc.id, ...doc.data() } as Fornecedor);
     });
-    callback(fornecedores);
+
+    if (showAll) {
+      callback(
+        data.sort((a, b) => {
+          if (a.status === 'ativo' && b.status === 'inativo') return -1;
+          if (a.status === 'inativo' && b.status === 'ativo') return 1;
+          // **CORREÇÃO APLICADA AQUI**
+          return a.nomeRazaoSocial.localeCompare(b.nomeRazaoSocial);
+        })
+      );
+    } else {
+      const ativos = data.filter((item) => item.status === "ativo");
+      callback(ativos);
+    }
   });
 };
 
-// Função antiga mantida para compatibilidade, se necessário, ou pode ser removida.
-export const subscribeToFornecedores = (callback: (fornecedores: Fornecedor[]) => void) => {
-  const q = query(collection(db, "fornecedores"), where("status", "==", "ativo"));
+export const addFornecedor = async (
+  // **CORREÇÃO:** A tipagem do 'data' foi ajustada para usar FornecedorFormSchema
+  data: z.infer<typeof FornecedorFormSchema>,
+  user: { uid: string; displayName: string | null }
+) => {
+  if (!user) throw new Error("Usuário não autenticado.");
 
-  const unsubscribe = onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    const fornecedores: Fornecedor[] = [];
-    querySnapshot.forEach((doc) => {
-      fornecedores.push({ id: doc.id, ...doc.data() as Omit<Fornecedor, 'id'> });
-    });
-    callback(fornecedores);
-  });
-  return unsubscribe;
+  const dataComTimestamp = {
+    ...data,
+    status: "ativo",
+    registradoPor: { uid: user.uid, nome: user.displayName || "Usuário" },
+    createdAt: serverTimestamp(),
+  };
+  const docRef = await addDoc(fornecedoresCollection, dataComTimestamp);
+  return docRef.id;
 };
 
-export const updateFornecedor = async (id: string, fornecedor: Partial<Omit<Fornecedor, 'id' | 'createdAt' | 'status'>>) => {
-  const fornecedorDoc = doc(db, "fornecedores", id);
-  await updateDoc(fornecedorDoc, fornecedor);
+export const updateFornecedor = async (
+  id: string,
+  // **CORREÇÃO:** A tipagem do 'data' foi ajustada para usar FornecedorFormSchema
+  data: Partial<z.infer<typeof FornecedorFormSchema>>
+) => {
+  const docRef = doc(db, "fornecedores", id);
+  await updateDoc(docRef, data);
 };
 
-export const setFornecedorStatus = async (id: string, status: 'ativo' | 'inativo') => {
-    const fornecedorDoc = doc(db, "fornecedores", id);
-    await updateDoc(fornecedorDoc, { status });
-}
+export const setFornecedorStatus = async (
+  id: string,
+  status: "ativo" | "inativo"
+) => {
+  const docRef = doc(db, "fornecedores", id);
+  await updateDoc(docRef, { status });
+};
