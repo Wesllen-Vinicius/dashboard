@@ -1,71 +1,70 @@
-import { db, functions } from "@/lib/firebase";
-import { httpsCallable } from "firebase/functions";
-import { collection, doc, onSnapshot, QuerySnapshot, DocumentData, Timestamp, updateDoc, query } from "firebase/firestore";
-import { Producao, producaoSchema, ProducaoFormValues, Abate } from "@/lib/schemas";
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot, doc, updateDoc, serverTimestamp, Query, query, where, QuerySnapshot, DocumentData, Timestamp, addDoc } from "firebase/firestore";
+import { Producao, producaoSchema } from "@/lib/schemas";
+import { z } from "zod";
 
-/**
- * Registra uma nova produção de forma segura através de uma Cloud Function.
- * A lógica da transação foi movida para o servidor para garantir a integridade dos dados.
- */
-export const registrarProducao = async (producaoData: ProducaoFormValues, user: { uid: string; nome: string; role?: 'ADMINISTRADOR' | 'USUARIO' }) => {
-  try {
-    const registrarProducaoFunction = httpsCallable(functions, 'registrarProducaoHttps');
+const formSchema = producaoSchema.pick({
+  data: true,
+  responsavelId: true,
+  abateId: true,
+  lote: true,
+  descricao: true,
+  produtos: true,
+});
+type ProducaoFormValues = z.infer<typeof formSchema>;
 
-    // Prepara o payload, convertendo a data para string ISO.
-    // O objeto 'user' é removido, pois a identidade do usuário será
-    // obtida de forma segura no backend através do token de autenticação.
-    const payload = {
-      ...producaoData,
-      data: producaoData.data.toISOString(),
-    };
+export const subscribeToProducoes = (
+  callback: (producoes: Producao[]) => void,
+  includeInactive: boolean = false
+) => {
+  const q = query(collection(db, "producao"));
 
-    await registrarProducaoFunction(payload);
-  } catch (error: any) {
-    console.error("Erro ao chamar a Cloud Function de registrar produção: ", error);
-    // Repassa a mensagem de erro vinda do backend para o frontend.
-    throw new Error(error.message || "Falha ao registrar a produção.");
-  }
-};
+  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
+    const producoes: Producao[] = [];
+    querySnapshot.forEach((doc) => {
+      const docData = doc.data();
+      const dataToParse = {
+        id: doc.id,
+        ...docData,
+        data: docData.data instanceof Timestamp ? docData.data.toDate() : docData.data,
+        createdAt: docData.createdAt instanceof Timestamp ? docData.createdAt.toDate() : docData.createdAt,
+      };
 
-export const subscribeToProducoes = (callback: (producoes: Producao[]) => void) => {
-    const q = query(collection(db, "producoes"));
-
-    return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-      const producoes: Producao[] = [];
-      querySnapshot.forEach((doc) => {
-        const docData = doc.data();
-
-        const dataToParse = {
-            id: doc.id,
-            ...docData,
-            data: docData.data instanceof Timestamp ? docData.data.toDate() : docData.data,
-        };
-
-        const parsed = producaoSchema.safeParse(dataToParse);
-        if(parsed.success) {
-            producoes.push(parsed.data);
-        } else {
-            console.error("Documento de produção inválido no Firestore:", doc.id, parsed.error.format());
-        }
-      });
-
-      const filtered = producoes.filter(p => p.status !== 'inativo');
-      callback(filtered.sort((a, b) => (a.data as Date).getTime() - (b.data as Date).getTime()));
-    }, (error) => {
-      console.error("Erro no listener de Produções:", error);
+      const parsed = producaoSchema.safeParse(dataToParse);
+      if (parsed.success) {
+        producoes.push(parsed.data);
+      } else {
+        console.error("Documento de produção inválido:", doc.id, parsed.error.format());
+      }
     });
+
+    const filteredData = includeInactive ? producoes : producoes.filter(p => p.status === 'ativo');
+    callback(filteredData.sort((a, b) => b.data.getTime() - a.data.getTime()));
+  }, (error) => {
+    console.error("Erro no listener de Produções:", error);
+  });
 };
 
-export const updateProducao = async (id: string, data: Partial<ProducaoFormValues>) => {
-    const producaoDoc = doc(db, "producoes", id);
-    const dataToUpdate: { [key: string]: any } = { ...data };
-    if (data.data) {
-        dataToUpdate.data = Timestamp.fromDate(data.data);
+
+export const addProducao = async (producaoData: Omit<Producao, 'id' | 'status' | 'createdAt'>) => {
+    const dataToSave = {
+        ...producaoData,
+        status: 'ativo',
+        createdAt: serverTimestamp(),
+        data: Timestamp.fromDate(producaoData.data),
+    };
+    await addDoc(collection(db, "producao"), dataToSave);
+};
+
+
+export const updateProducao = async (id: string, producaoData: Partial<Omit<Producao, 'id'>>) => {
+    const dataToUpdate: { [key: string]: any } = { ...producaoData };
+    if (producaoData.data) {
+        dataToUpdate.data = Timestamp.fromDate(producaoData.data);
     }
-    await updateDoc(producaoDoc, dataToUpdate);
+    await updateDoc(doc(db, "producao", id), dataToUpdate);
 };
 
 export const setProducaoStatus = async (id: string, status: 'ativo' | 'inativo') => {
-    const producaoDoc = doc(db, "producoes", id);
-    await updateDoc(producaoDoc, { status });
+    await updateDoc(doc(db, "producao", id), { status });
 };

@@ -1,121 +1,227 @@
-"use client";
+'use client';
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { toast } from "sonner";
-
-import { useAuthStore } from "@/store/auth.store";
-import { useDataStore } from "@/store/data.store";
-import { Abate, abateSchema } from "@/lib/schemas";
-import { addAbate, updateAbate } from "@/lib/services/abates.services";
-
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Combobox } from "@/components/ui/combobox";
-import { DatePicker } from "@/components/date-picker";
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { addAbate, updateAbate } from '@/lib/services/abates.services';
+import { Abate, abateSchema } from '@/lib/schemas';
+import { toast } from 'sonner';
+import { Combobox } from '@/components/ui/combobox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/store/auth.store'; // Corrigido
+import { useDataStore } from '@/store/data.store'; // Corrigido
+import { useEffect } from 'react';
 
 const formSchema = abateSchema.pick({
-    data: true,
-    total: true,
-    condenado: true,
-    responsavelId: true,
-    compraId: true,
+  data: true,
+  total: true,
+  condenado: true,
+  responsavelId: true,
+  compraId: true,
 });
 type AbateFormValues = z.infer<typeof formSchema>;
 
 interface AbateFormProps {
   isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (isOpen: boolean) => void;
   abateToEdit?: Abate | null;
 }
 
 export function AbateForm({ isOpen, onOpenChange, abateToEdit }: AbateFormProps) {
-  const { user, role } = useAuthStore();
-  const { funcionarios, compras } = useDataStore();
-
-  const isEditing = !!abateToEdit;
+  const { user } = useAuthStore(); // Corrigido
+  const { compras, users } = useDataStore(); // Corrigido
+  const isEditMode = !!abateToEdit;
 
   const form = useForm<AbateFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: isEditing
-      ? {
-          ...abateToEdit,
-          data: new Date(abateToEdit.data),
-        }
-      : {
-          data: new Date(),
-          total: 0,
-          condenado: 0,
-          responsavelId: "",
-          compraId: "",
-        },
+    defaultValues: isEditMode ? {
+        ...abateToEdit,
+        data: new Date(abateToEdit.data),
+      } : {
+      data: new Date(),
+      total: 0,
+      condenado: 0,
+      responsavelId: '',
+      compraId: '',
+    },
   });
 
-  const { formState: { isSubmitting } } = form;
+  useEffect(() => {
+    if (isOpen && !isEditMode) {
+      form.reset({
+        data: new Date(),
+        total: 0,
+        condenado: 0,
+        responsavelId: '',
+        compraId: '',
+      });
+    } else if (isOpen && isEditMode) {
+      form.reset({
+        ...abateToEdit,
+        data: new Date(abateToEdit.data)
+      });
+    }
+  }, [isOpen, isEditMode, abateToEdit, form]);
 
-  const funcionarioOptions = funcionarios.map(f => ({ label: f.nomeCompleto, value: f.id! }));
-  const compraOptions = compras.map(c => ({
-    label: `NF: ${c.notaFiscal} - Data: ${c.data ? new Date(c.data).toLocaleDateString('pt-BR') : 'N/A'}`,
-    value: c.id!,
-  }));
+  const compraOptions = compras
+    .filter(c => c.status === 'ativo')
+    .map(c => ({ label: `NF ${c.notaFiscal}`, value: c.id! }));
+
+  const userOptions = users
+    .filter(u => u.status === 'ativo')
+    .map(u => ({ label: u.displayName, value: u.uid! }));
 
   const onSubmit = async (values: AbateFormValues) => {
-    if (!user || !role) return toast.error("Autenticação necessária.");
-
-    try {
-      if (isEditing && abateToEdit?.id) {
-        await updateAbate(abateToEdit.id, values);
-        toast.success("Registro de abate atualizado!");
-      } else {
-        await addAbate(values, { uid: user.uid, nome: user.displayName || "Usuário", role });
-        toast.success("Novo abate registrado com sucesso!");
-      }
-      form.reset();
-      onOpenChange(false);
-    } catch (error: any) {
-      toast.error("Falha ao salvar registro.", { description: error.message });
+    if (!user || !user.role) {
+        toast.error("Você precisa estar autenticado para realizar esta ação.");
+        return;
     }
+
+    const userPayload = {
+        uid: user.uid,
+        nome: user.displayName || 'Usuário desconhecido',
+        role: user.role,
+    }
+
+    const promise = isEditMode
+      ? updateAbate(abateToEdit!.id!, values)
+      : addAbate(values, userPayload);
+
+    toast.promise(promise, {
+      loading: `${isEditMode ? 'Atualizando' : 'Criando'} abate...`,
+      success: `Abate ${isEditMode ? 'atualizado' : 'criado'} com sucesso!`,
+      error: `Erro ao ${isEditMode ? 'atualizar' : 'criar'} o abate.`,
+    });
+
+    onOpenChange(false);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[625px]">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Editar Registro de Abate" : "Novo Registro de Abate"}</DialogTitle>
+          <DialogTitle>{isEditMode ? 'Editar Abate' : 'Novo Abate'}</DialogTitle>
           <DialogDescription>
-            Preencha os detalhes do abate. Campos com * são obrigatórios.
+            {isEditMode ? 'Atualize os detalhes do abate.' : 'Preencha as informações para um novo abate.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} id="abate-form" className="space-y-4 py-4">
-            <FormField name="compraId" control={form.control} render={({ field }) => (
-              <FormItem><FormLabel>Vincular Compra de Origem *</FormLabel><Combobox options={compraOptions} {...field} placeholder="Selecione uma compra" searchPlaceholder="Buscar por NF ou data..." /><FormMessage /></FormItem>
-            )}/>
-            <FormField name="data" control={form.control} render={({ field }) => (
-              <FormItem className="flex flex-col"><FormLabel>Data do Abate *</FormLabel><DatePicker date={field.value} onDateChange={field.onChange} /><FormMessage /></FormItem>
-            )}/>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField name="total" control={form.control} render={({ field }) => (
-                <FormItem><FormLabel>Total de Animais *</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-              )}/>
-              <FormField name="condenado" control={form.control} render={({ field }) => (
-                <FormItem><FormLabel>Condenados</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-              )}/>
-            </div>
-            <FormField name="responsavelId" control={form.control} render={({ field }) => (
-              <FormItem><FormLabel>Responsável pelo Abate *</FormLabel><Combobox options={funcionarioOptions} {...field} placeholder="Selecione um responsável" searchPlaceholder="Buscar responsável..." /><FormMessage /></FormItem>
-            )}/>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="data"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>Data do Abate</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant={"outline"}
+                          className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
+                        >
+                          {field.value ? (format(new Date(field.value), "PPP")) : (<span>Selecione uma data</span>)}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus />
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="compraId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Compra Vinculada</FormLabel>
+                  <FormControl>
+                    <Combobox
+                      options={compraOptions}
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Selecione uma compra (NF)"
+                      searchPlaceholder="Buscar NF..."
+                      emptyMessage="Nenhuma compra encontrada."
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="responsavelId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Responsável pelo Abate</FormLabel>
+                  <FormControl>
+                    <Combobox
+                      options={userOptions}
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Selecione um responsável"
+                      searchPlaceholder="Buscar responsável..."
+                      emptyMessage="Nenhum usuário encontrado."
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="total"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Total de Animais</FormLabel>
+                  <FormControl>
+                    <Input type="number" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="condenado"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Animais Condenados</FormLabel>
+                  <FormControl>
+                    <Input type="number" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? 'Salvando...' : (isEditMode ? 'Salvar Alterações' : 'Criar Abate')}
+              </Button>
+            </DialogFooter>
           </form>
         </Form>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button type="submit" form="abate-form" disabled={isSubmitting}>
-            {isSubmitting ? "Salvando..." : "Salvar Registro"}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

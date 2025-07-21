@@ -1,16 +1,12 @@
 import { z } from "zod";
 import { isValidCnpj, isValidCpf } from "./validators";
 
-// =================================================================
-// Schemas Base e de Autenticação
-// =================================================================
 export const loginSchema = z.object({
     email: z.string().email("Por favor, insira um e-mail válido."),
     password: z.string().min(6, "A senha deve ter pelo menos 6 caracteres."),
 });
 export type LoginValues = z.infer<typeof loginSchema>;
 
-// ADICIONE ESTES DOIS (SCHEMA E TIPO) AQUI
 export const userInfoSchema = z.object({
   uid: z.string(),
   nome: z.string(),
@@ -30,10 +26,6 @@ export const userSchema = z.object({
 export type SystemUser = z.infer<typeof userSchema>;
 
 
-// =================================================================
-// Schemas de Cadastros Principais
-// =================================================================
-
 export const enderecoSchema = z.object({
     logradouro: z.string().min(1, "O logradouro é obrigatório."),
     numero: z.string().min(1, "O número é obrigatório."),
@@ -46,11 +38,7 @@ export const enderecoSchema = z.object({
     codigoPais: z.string().default("1058"),
 });
 
-export const IndicadorIEDestinatario = z.enum([
-    "1", // Contribuinte ICMS
-    "2", // Contribuinte isento de Inscrição
-    "9", // Não Contribuinte
-]);
+export const IndicadorIEDestinatario = z.enum([ "1", "2", "9" ]);
 
 const dadosBancariosSchema = z.object({
   banco: z.string().min(1, "O nome do banco é obrigatório."),
@@ -58,8 +46,6 @@ const dadosBancariosSchema = z.object({
   conta: z.string().min(1, "A conta é obrigatória."),
   pix: z.string().optional().or(z.literal("")),
 });
-
-
 
 export const cargoSchema = z.object({
   id: z.string().optional(),
@@ -80,6 +66,7 @@ export const funcionarioSchema = z.object({
   banco: z.string().min(1, "O banco é obrigatório."),
   agencia: z.string().min(1, "A agência é obrigatória."),
   conta: z.string().min(1, "A conta é obrigatória."),
+  endereco: enderecoSchema.optional(),
   createdAt: z.any().optional(),
   status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
 });
@@ -155,10 +142,6 @@ export const metaSchema = z.object({
   status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
 });
 export type Meta = z.infer<typeof metaSchema> & { produtoNome?: string, unidade?: string };
-
-// =================================================================
-// Schemas de Transações e Operações
-// =================================================================
 
 const itemCompradoSchema = z.object({
   produtoId: z.string().min(1, "Selecione um produto."),
@@ -265,10 +248,6 @@ export const vendaSchema = z.object({
 });
 export type Venda = z.infer<typeof vendaSchema>;
 
-// =================================================================
-// Schemas Financeiros e de Configuração
-// =================================================================
-
 export const movimentacaoSchema = z.object({
   id: z.string().optional(),
   produtoId: z.string().min(1, "Selecione um produto."),
@@ -374,7 +353,6 @@ export const contaBancariaSchema = z.object({
   createdAt: z.any().optional(),
 });
 
-// Este é o schema corrigido para o formulário. Ele será a única fonte de verdade.
 export const ContaBancariaFormSchema = contaBancariaSchema.pick({
     nomeConta: true,
     banco: true,
@@ -382,34 +360,22 @@ export const ContaBancariaFormSchema = contaBancariaSchema.pick({
     conta: true,
     tipo: true,
 }).extend({
-    // Garante que saldoInicial seja um número requerido para o formulário.
     saldoInicial: z.coerce.number({ required_error: "O saldo inicial é obrigatório." }),
 });
 
 export type ContaBancaria = z.infer<typeof contaBancariaSchema>;
 
-
-// SUBSTITUA/ADICIONE ESTE BLOCO INTEIRO
 export const fornecedorSchema = z.object({
   id: z.string().optional(),
   status: z.enum(["ativo", "inativo"]),
   tipoPessoa: z.enum(["juridica", "fisica"]),
-  // **CORREÇÃO:** Usa as funções corretas na validação.
   cpfCnpj: z.string().refine((val) => isValidCpf(val) || isValidCnpj(val), "CPF/CNPJ inválido."),
   nomeRazaoSocial: z.string().min(3, "Nome ou Razão Social é obrigatório."),
   nomeFantasia: z.string().optional(),
   inscricaoEstadual: z.string().optional(),
   email: z.string().email("E-mail inválido.").optional().or(z.literal('')),
   telefone: z.string().optional(),
-  endereco: z.object({
-    cep: z.string().optional(),
-    logradouro: z.string().optional(),
-    numero: z.string().optional(),
-    complemento: z.string().optional(),
-    bairro: z.string().optional(),
-    cidade: z.string().optional(),
-    uf: z.string().optional(),
-  }).optional(),
+  endereco: enderecoSchema.optional(),
   banco: z.object({
     nome: z.string().optional(),
     agencia: z.string().optional(),
@@ -436,9 +402,6 @@ export const FornecedorFormSchema = fornecedorSchema.pick({
 });
 
 export type Fornecedor = z.infer<typeof fornecedorSchema>;
-
-
-
 
 export const clienteSchema = z.object({
   id: z.string().optional(),

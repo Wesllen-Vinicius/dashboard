@@ -1,8 +1,8 @@
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, serverTimestamp, Query, query, where, QuerySnapshot, DocumentData, Timestamp, addDoc } from "firebase/firestore";
-import { DateRange } from "react-day-picker";
-import { z } from "zod";
 import { Abate, abateSchema } from "@/lib/schemas";
+import { z } from "zod";
+import { DateRange } from "react-day-picker";
 
 const formSchema = abateSchema.pick({
   data: true,
@@ -13,7 +13,85 @@ const formSchema = abateSchema.pick({
 });
 type AbateFormValues = z.infer<typeof formSchema>;
 
-export const addAbate = async (formValues: AbateFormValues, user: { uid: string, nome: string, role: 'ADMINISTRADOR' | 'USUARIO' }) => {
+// Função para a página de Abates (CRUD)
+export const subscribeToAbates = (
+  callback: (abates: Abate[]) => void,
+  includeInactive: boolean = false
+) => {
+  const q = query(collection(db, "abates"));
+
+  return onSnapshot(q, (querySnapshot) => {
+    const abates: Abate[] = [];
+    querySnapshot.forEach((doc) => {
+      const docData = doc.data();
+      const dataToParse = {
+        id: doc.id,
+        ...docData,
+        data: docData.data instanceof Timestamp ? docData.data.toDate() : docData.data,
+        createdAt: docData.createdAt instanceof Timestamp ? docData.createdAt.toDate() : docData.createdAt,
+      };
+
+      const parsed = abateSchema.safeParse(dataToParse);
+      if (parsed.success) {
+        abates.push(parsed.data);
+      } else {
+        console.error("Documento de abate inválido (subscribeToAbates):", doc.id, parsed.error.format());
+      }
+    });
+
+    const filteredData = includeInactive ? abates : abates.filter(abate => abate.status === 'ativo');
+    callback(filteredData.sort((a, b) => b.data.getTime() - a.data.getTime()));
+  }, (error) => {
+    console.error("Erro no listener de Abates (CRUD):", error);
+  });
+};
+
+// Função para a data.store.ts (Dashboard)
+export const subscribeToAbatesByDateRange = (
+  dateRange: DateRange | undefined,
+  callback: (abates: Abate[]) => void
+) => {
+  // Apenas busca os ativos, conforme lógica original
+  const q = query(collection(db, "abates"), where("status", "==", "ativo"));
+
+  return onSnapshot(q, (querySnapshot) => {
+    let abates: Abate[] = [];
+    querySnapshot.forEach((doc) => {
+      const docData = doc.data();
+      const dataToParse = {
+        id: doc.id,
+        ...docData,
+        data: docData.data instanceof Timestamp ? docData.data.toDate() : docData.data,
+        createdAt: docData.createdAt instanceof Timestamp ? docData.createdAt.toDate() : docData.createdAt,
+      };
+
+      const parsed = abateSchema.safeParse(dataToParse);
+      if (parsed.success) {
+        abates.push(parsed.data);
+      } else {
+        console.error("Documento de abate inválido (DateRange):", doc.id, parsed.error.format());
+      }
+    });
+
+    let filteredData = abates;
+
+    if (dateRange?.from) {
+      const toDate = dateRange.to || dateRange.from;
+      const fromTimestamp = new Date(dateRange.from.setHours(0, 0, 0, 0)).getTime();
+      const toTimestamp = new Date(toDate.setHours(23, 59, 59, 999)).getTime();
+      filteredData = filteredData.filter(abate => {
+        const abateTime = abate.data.getTime();
+        return abateTime >= fromTimestamp && abateTime <= toTimestamp;
+      });
+    }
+
+    callback(filteredData.sort((a, b) => b.data.getTime() - a.data.getTime()));
+  }, (error) => {
+    console.error("Erro no listener de Abates (DateRange):", error);
+  });
+};
+
+export const addAbate = async (formValues: AbateFormValues, user: { uid: string; nome: string; role?: 'ADMINISTRADOR' | 'USUARIO' }) => {
   try {
     const dataToSave = {
       ...formValues,
@@ -29,57 +107,16 @@ export const addAbate = async (formValues: AbateFormValues, user: { uid: string,
   }
 };
 
-export const subscribeToAbatesByDateRange = (dateRange: DateRange | undefined, callback: (abates: Abate[]) => void) => {
-  const q = query(collection(db, "abates"));
-
-  const unsubscribe = onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    let abates: Abate[] = [];
-    querySnapshot.forEach((doc) => {
-        const docData = doc.data();
-        const dataToParse = {
-            id: doc.id,
-            ...docData,
-            data: docData.data instanceof Timestamp ? docData.data.toDate() : docData.data
-        };
-
-        const parsed = abateSchema.safeParse(dataToParse);
-        if (parsed.success) {
-            abates.push(parsed.data);
-        } else {
-            console.error("Documento de abate inválido:", doc.id, parsed.error.format());
-        }
-    });
-
-    let filteredData = abates.filter(abate => abate.status !== 'inativo');
-
-    if (dateRange?.from) {
-        const toDate = dateRange.to || dateRange.from;
-        const fromTimestamp = new Date(dateRange.from.setHours(0, 0, 0, 0)).getTime();
-        const toTimestamp = new Date(toDate.setHours(23, 59, 59, 999)).getTime();
-        filteredData = filteredData.filter(abate => {
-            const abateTime = abate.data.getTime();
-            return abateTime >= fromTimestamp && abateTime <= toTimestamp;
-        });
-    }
-
-    callback(filteredData.sort((a, b) => b.data.getTime() - a.data.getTime()));
-  }, (error) => {
-    console.error("Erro no listener de Abates: ", error);
-  });
-
-  return unsubscribe;
-};
-
 export const updateAbate = async (id: string, formValues: Partial<AbateFormValues>) => {
-    const dataToUpdate: { [key:string]: any} = { ...formValues };
-    if (formValues.data) {
-        dataToUpdate.data = Timestamp.fromDate(formValues.data);
-    }
-    const abateDoc = doc(db, "abates", id);
-    await updateDoc(abateDoc, dataToUpdate);
+  const dataToUpdate: { [key: string]: any } = { ...formValues };
+  if (formValues.data) {
+    dataToUpdate.data = Timestamp.fromDate(formValues.data);
+  }
+  const abateDoc = doc(db, "abates", id);
+  await updateDoc(abateDoc, dataToUpdate);
 };
 
-export const setAbateStatus = async (id:string, status: 'ativo' | 'inativo') => {
-    const abateDoc = doc(db, "abates", id);
-    await updateDoc(abateDoc, { status });
-}
+export const setAbateStatus = async (id: string, status: 'ativo' | 'inativo') => {
+  const abateDoc = doc(db, "abates", id);
+  await updateDoc(abateDoc, { status });
+};

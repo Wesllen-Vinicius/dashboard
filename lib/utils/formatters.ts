@@ -79,3 +79,10 @@ export const formatDate = (date: any): string => {
 
     return format(dateObject, "dd/MM/yyyy 'às' HH:mm:ss", { locale: ptBR });
 };
+
+export const formatNumber = (value: number | null | undefined): string => {
+  if (value === null || value === undefined) {
+    return '0';
+  }
+  return new Intl.NumberFormat('pt-BR').format(value);
+};

@@ -1,25 +1,41 @@
-"use client";
+'use client';
 
-import { Button } from "@/components/ui/button";
-import { DateRangePicker } from "@/components/date-range-picker";
-import { IconPlus } from "@tabler/icons-react";
-import { DateRange } from "react-day-picker";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { PlusCircle } from 'lucide-react';
 
-interface AbateActionsProps {
-  dateRange: DateRange | undefined;
-  onDateChange: (date: DateRange | undefined) => void;
-  onNewAbate: () => void;
+interface AbatesActionsProps {
+  onAdd: () => void;
+  onSearch: (term: string) => void;
+  showInactive: boolean;
+  onShowInactiveChange: (checked: boolean) => void;
 }
 
-export function AbateActions({ dateRange, onDateChange, onNewAbate }: AbateActionsProps) {
+export function AbatesActions({ onAdd, onSearch, showInactive, onShowInactiveChange }: AbatesActionsProps) {
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-      <h1 className="text-2xl font-bold tracking-tight">Gerenciamento de Abates</h1>
-      <div className="flex items-center gap-2">
-        <DateRangePicker date={dateRange} onDateChange={onDateChange} />
-        <Button onClick={onNewAbate}>
-          <IconPlus className="mr-2 h-4 w-4" />
-          Registrar Abate
+      <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-nowrap">
+        Gestão de Abates
+      </h1>
+      <div className="flex w-full sm:w-auto flex-col sm:flex-row items-center gap-2">
+        <Input
+          placeholder="Filtrar por nota fiscal..."
+          onChange={(e) => onSearch(e.target.value)}
+          className="w-full sm:w-auto"
+        />
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="show-inactive"
+            checked={showInactive}
+            onCheckedChange={onShowInactiveChange}
+          />
+          <Label htmlFor="show-inactive">Mostrar inativos</Label>
+        </div>
+        <Button onClick={onAdd} className="w-full sm:w-auto">
+          <PlusCircle className="mr-2 h-4 w-4" />
+          Novo Abate
         </Button>
       </div>
     </div>
