@@ -6,22 +6,22 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { PlusCircle } from 'lucide-react';
 
-interface CompraActionsProps {
+interface ProdutosActionsProps {
   onAdd: () => void;
   onSearch: (term: string) => void;
   showInactive: boolean;
   onShowInactiveChange: (checked: boolean) => void;
 }
 
-export function CompraActions({ onAdd, onSearch, showInactive, onShowInactiveChange }: CompraActionsProps) {
+export function ProdutosActions({ onAdd, onSearch, showInactive, onShowInactiveChange }: ProdutosActionsProps) {
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
       <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-nowrap">
-        Gestão de Compras
+        Gestão de Produtos
       </h1>
       <div className="flex w-full sm:w-auto flex-col sm:flex-row items-center gap-2">
         <Input
-          placeholder="Filtrar por nota fiscal..."
+          placeholder="Filtrar por nome ou código..."
           onChange={(e) => onSearch(e.target.value)}
           className="w-full sm:w-auto"
         />
@@ -35,7 +35,7 @@ export function CompraActions({ onAdd, onSearch, showInactive, onShowInactiveCha
         </div>
         <Button onClick={onAdd} className="w-full sm:w-auto">
           <PlusCircle className="mr-2 h-4 w-4" />
-          Nova Compra
+          Novo Produto
         </Button>
       </div>
     </div>

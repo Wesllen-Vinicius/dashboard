@@ -1,70 +1,48 @@
 import { db } from "@/lib/firebase";
-import { collection, addDoc, onSnapshot, doc, updateDoc, QuerySnapshot, DocumentData, serverTimestamp, query, where, getDocs } from "firebase/firestore";
-import {
-  Produto,
-  produtoSchema,
-} from "@/lib/schemas";
+import { collection, onSnapshot, doc, updateDoc, serverTimestamp, Query, query, where, QuerySnapshot, DocumentData, Timestamp, addDoc } from "firebase/firestore";
+import { Produto, produtoSchema } from "@/lib/schemas";
 
-export const getProximoCodigoProduto = async (): Promise<string> => {
-    const q = query(collection(db, "produtos"));
-    const querySnapshot = await getDocs(q);
-
-    if (querySnapshot.empty) {
-        return "1";
-    }
-
-    let maxCodigo = 0;
-    querySnapshot.forEach((doc) => {
-        const codigo = parseInt(doc.data().codigo, 10);
-        if (!isNaN(codigo) && codigo > maxCodigo) {
-            maxCodigo = codigo;
-        }
-    });
-
-    return (maxCodigo + 1).toString();
-};
-
-
-export const addProduto = async (produto: Omit<Produto, 'id' | 'unidadeNome' | 'categoriaNome' | 'createdAt' | 'status'>) => {
-  try {
-    const proximoCodigo = await getProximoCodigoProduto();
-    const dataWithTimestamp = {
-        ...produto,
-        codigo: proximoCodigo,
-        status: 'ativo',
-        createdAt: serverTimestamp()
-    };
-    const docRef = await addDoc(collection(db, "produtos"), dataWithTimestamp);
-    return docRef.id;
-  } catch (e) {
-    console.error("Erro ao adicionar produto: ", e);
-    throw new Error("Não foi possível adicionar o produto.");
-  }
-};
-
-export const subscribeToProdutos = (callback: (produtos: Produto[]) => void) => {
-  const q = query(collection(db, "produtos"), where("status", "==", "ativo"));
+export const subscribeToProdutos = (
+  callback: (produtos: Produto[]) => void,
+  includeInactive: boolean = false
+) => {
+  const q = query(collection(db, "produtos"));
 
   return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
     const produtos: Produto[] = [];
     querySnapshot.forEach((doc) => {
-      try {
-        const data = produtoSchema.parse(doc.data());
-        produtos.push({ id: doc.id, ...data });
-      } catch (error) {
-        console.error("Erro de validação em um produto do Firestore:", doc.id, error);
+      const docData = doc.data();
+      const dataToParse = { id: doc.id, ...docData };
+
+      const parsed = produtoSchema.safeParse(dataToParse);
+      if (parsed.success) {
+        produtos.push(parsed.data);
+      } else {
+        console.error("Documento de produto inválido:", doc.id, parsed.error.format());
       }
     });
-    callback(produtos);
+
+    const filteredData = includeInactive ? produtos : produtos.filter(p => p.status === 'ativo');
+    callback(filteredData.sort((a, b) => a.nome.localeCompare(b.nome)));
+  }, (error) => {
+    console.error("Erro no listener de Produtos:", error);
   });
 };
 
-export const updateProduto = async (id: string, produto: Partial<Omit<Produto, 'id' | 'unidadeNome' | 'categoriaNome' | 'createdAt' | 'status'>>) => {
-  const produtoDoc = doc(db, "produtos", id);
-  await updateDoc(produtoDoc, produto);
+export const addProduto = async (produtoData: Omit<Produto, 'id' | 'status' | 'createdAt' | 'quantidade'>) => {
+    const dataToSave = {
+        ...produtoData,
+        quantidade: 0, // Estoque inicial é sempre 0
+        status: 'ativo',
+        createdAt: serverTimestamp(),
+    };
+    await addDoc(collection(db, "produtos"), dataToSave);
+};
+
+export const updateProduto = async (id: string, produtoData: Partial<Omit<Produto, 'id'>>) => {
+    await updateDoc(doc(db, "produtos", id), produtoData);
 };
 
 export const setProdutoStatus = async (id: string, status: 'ativo' | 'inativo') => {
-    const produtoDoc = doc(db, "produtos", id);
-    await updateDoc(produtoDoc, { status });
+    await updateDoc(doc(db, "produtos", id), { status });
 };

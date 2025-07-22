@@ -26,6 +26,7 @@ interface ComboboxProps {
   placeholder?: string;
   emptyMessage?: string;
   searchPlaceholder?: string;
+  disabled?: boolean;
 }
 
 export function Combobox({
@@ -34,7 +35,8 @@ export function Combobox({
     onChange,
     placeholder = "Selecione...",
     emptyMessage = "Nenhum item encontrado.",
-    searchPlaceholder = "Buscar item..."
+    searchPlaceholder = "Buscar item...",
+    disabled = false
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
 
@@ -46,6 +48,7 @@ export function Combobox({
           role="combobox"
           aria-expanded={open}
           className="w-full justify-between"
+          disabled={disabled}
         >
           {value
             ? options.find((option) => option.value === value)?.label
@@ -60,6 +63,7 @@ export function Combobox({
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
+                // A CORREÇÃO ESTÁ AQUI: Adicionada a "key"
                 <CommandItem
                   key={option.value}
                   value={option.value}
