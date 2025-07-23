@@ -1,64 +1,55 @@
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase"; // Import auth
 import {
   collection,
-  addDoc,
   onSnapshot,
   doc,
   updateDoc,
-  serverTimestamp,
   query,
   orderBy,
   QuerySnapshot,
   DocumentData,
+  addDoc,
+  serverTimestamp,
 } from "firebase/firestore";
-import { z } from "zod";
-// **CORREÇÃO:** Importa ambos os tipos necessários do arquivo de schemas.
 import { ContaBancaria, ContaBancariaFormSchema } from "@/lib/schemas";
+import { z } from "zod";
 
-const contasCollection = collection(db, "contasBancarias");
+const contasBancariasCollection = collection(db, "contas-bancarias");
 
 export const subscribeToContasBancarias = (
-  callback: (contas: ContaBancaria[]) => void,
-  showAll: boolean = false
+  callback: (contas: ContaBancaria[]) => void
 ) => {
-  const q = query(collection(db, "contasBancarias"), orderBy("nomeConta"));
+  const q = query(contasBancariasCollection, orderBy("nomeConta"));
 
   return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    let contasData: ContaBancaria[] = [];
+    const data: ContaBancaria[] = [];
     querySnapshot.forEach((doc) => {
-      contasData.push({ id: doc.id, ...doc.data() } as ContaBancaria);
+      data.push({ id: doc.id, ...doc.data() } as ContaBancaria);
     });
-
-    if (showAll) {
-      callback(
-        contasData.sort((a, b) => {
-          if (a.status === 'ativa' && b.status === 'inativa') return -1;
-          if (a.status === 'inativa' && b.status === 'ativa') return 1;
-          return a.nomeConta.localeCompare(b.nomeConta);
-        })
-      );
-    } else {
-      const ativas = contasData.filter((c) => c.status === 'ativa');
-      callback(ativas);
-    }
+    callback(data);
   });
 };
 
 export const addContaBancaria = async (
-  // **CORREÇÃO:** O `data` agora é corretamente tipado pelo `ContaBancariaFormSchema`.
-  data: z.infer<typeof ContaBancariaFormSchema>,
-  user: { uid: string; displayName: string | null }
+  data: z.infer<typeof ContaBancariaFormSchema>
 ) => {
-  if (!user) throw new Error("Usuário não autenticado.");
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error("Usuário não autenticado.");
+  }
 
+  const parsedData = ContaBancariaFormSchema.parse(data);
   const dataComTimestamp = {
-    ...data,
-    saldoAtual: data.saldoInicial,
-    status: "ativa",
-    registradoPor: { uid: user.uid, nome: user.displayName || "Usuário" },
+    ...parsedData,
+    saldoAtual: parsedData.saldoInicial,
+    status: "ativa" as const,
+    registradoPor: {
+      uid: user.uid,
+      nome: user.displayName || "Usuário desconhecido",
+    },
     createdAt: serverTimestamp(),
   };
-  const docRef = await addDoc(contasCollection, dataComTimestamp);
+  const docRef = await addDoc(contasBancariasCollection, dataComTimestamp);
   return docRef.id;
 };
 
@@ -66,14 +57,15 @@ export const updateContaBancaria = async (
   id: string,
   data: Partial<z.infer<typeof ContaBancariaFormSchema>>
 ) => {
-  const docRef = doc(db, "contasBancarias", id);
-  await updateDoc(docRef, data);
+  const parsedData = ContaBancariaFormSchema.partial().parse(data);
+  const docRef = doc(db, "contas-bancarias", id);
+  await updateDoc(docRef, parsedData);
 };
 
 export const setContaBancariaStatus = async (
   id: string,
   status: "ativa" | "inativa"
 ) => {
-  const docRef = doc(db, "contasBancarias", id);
+  const docRef = doc(db, "contas-bancarias", id);
   await updateDoc(docRef, { status });
 };

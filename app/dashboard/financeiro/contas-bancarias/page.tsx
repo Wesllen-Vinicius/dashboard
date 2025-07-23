@@ -4,51 +4,32 @@ import { useState, useEffect } from "react";
 import { Unsubscribe } from "firebase/firestore";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { ExpandedState, OnChangeFn } from "@tanstack/react-table";
 import { ContaBancaria } from "@/lib/schemas";
 import {
   subscribeToContasBancarias,
   setContaBancariaStatus,
 } from "@/lib/services/contasBancarias.services";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { ContasBancariasActions } from "./components/contas-bancarias-actions";
 import { ContasBancariasForm } from "./components/contas-bancarias-form";
-import ContasBancariasActions from "./components/contas-bancarias-actions";
 import { ContasBancariasTable } from "./components/contas-bancarias-table";
-
 
 export default function ContasBancariasPage() {
   const [contas, setContas] = useState<ContaBancaria[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showInactive, setShowInactive] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [contaToEdit, setContaToEdit] = useState<ContaBancaria | null>(null);
-  const [contaIdToDelete, setContaIdToDelete] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [idToToggle, setIdToToggle] = useState<string | null>(null);
 
   useEffect(() => {
     setIsLoading(true);
     const unsubscribe: Unsubscribe = subscribeToContasBancarias((data) => {
       setContas(data);
       setIsLoading(false);
-    }, showInactive);
+    });
     return () => unsubscribe();
-  }, [showInactive]);
-
-  const handleExpansionChange: OnChangeFn<ExpandedState> = (updater) => {
-    const oldExpanded = expanded;
-    const newExpanded =
-      typeof updater === "function" ? updater(oldExpanded) : updater;
-    const oldKeys = Object.keys(oldExpanded);
-    const newKeys = Object.keys(newExpanded);
-    if (newKeys.length > 1) {
-      const addedKey = newKeys.find((key) => !oldKeys.includes(key));
-      if (addedKey) setExpanded({ [addedKey]: true });
-      else setExpanded(newExpanded);
-    } else {
-      setExpanded(newExpanded);
-    }
-  };
+  }, []);
 
   const handleNew = () => {
     setContaToEdit(null);
@@ -60,41 +41,41 @@ export default function ContasBancariasPage() {
     setIsFormOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setContaIdToDelete(id);
+  const handleToggle = (id: string) => {
+    setIdToToggle(id);
     setIsConfirmOpen(true);
   };
 
-  const confirmDeletion = async () => {
-    if (!contaIdToDelete) return;
+  const confirmStatusToggle = async () => {
+    if (!idToToggle) return;
+    const conta = contas.find(c => c.id === idToToggle);
+    if (!conta) return;
+
+    const newStatus = conta.status === "ativa" ? "inativa" : "ativa";
+    const actionText = newStatus === "inativa" ? "inativada" : "reativada";
+
     try {
-      await setContaBancariaStatus(contaIdToDelete, "inativa");
-      toast.success("Conta inativada com sucesso!");
+      await setContaBancariaStatus(idToToggle, newStatus);
+      toast.success(`Conta ${actionText} com sucesso!`);
     } catch (e: any) {
-      toast.error("Erro ao inativar.", { description: e.message });
+      toast.error(`Erro ao ${actionText} a conta.`, { description: e.message });
     } finally {
-      setContaIdToDelete(null);
+      setIdToToggle(null);
       setIsConfirmOpen(false);
     }
   };
 
-  const handleReactivate = async (id: string) => {
-    try {
-      await setContaBancariaStatus(id, "ativa");
-      toast.success("Conta reativada com sucesso!");
-    } catch (e: any) {
-      toast.error("Erro ao reativar.", { description: e.message });
-    }
-  };
+  const contaToToggle = contas.find(c => c.id === idToToggle);
+  const isTogglingToInactive = contaToToggle?.status === 'ativa';
 
   return (
     <>
       <ConfirmationDialog
         open={isConfirmOpen}
         onOpenChange={setIsConfirmOpen}
-        onConfirm={confirmDeletion}
-        title="Confirmar Inativação"
-        description="Esta conta será inativada, mas poderá ser reativada depois. Nenhuma transação será excluída."
+        onConfirm={confirmStatusToggle}
+        title={isTogglingToInactive ? "Confirmar Inativação" : "Confirmar Reativação"}
+        description={`Você tem certeza que deseja ${isTogglingToInactive ? 'inativar' : 'reativar'} esta conta bancária?`}
       />
       <ContasBancariasForm
         isOpen={isFormOpen}
@@ -107,19 +88,12 @@ export default function ContasBancariasPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <ContasBancariasActions
-          onNew={handleNew}
-          showInactive={showInactive}
-          onShowInactiveChange={setShowInactive}
-        />
+        <ContasBancariasActions onNew={handleNew} />
         <ContasBancariasTable
           contas={contas}
           isLoading={isLoading}
           onEdit={handleEdit}
-          onDelete={handleDelete}
-          onReactivate={handleReactivate}
-          expanded={expanded}
-          onExpandedChange={handleExpansionChange}
+          onToggle={handleToggle}
         />
       </motion.div>
     </>

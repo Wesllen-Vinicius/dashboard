@@ -28,7 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Funcionario } from "@/lib/schemas";
-import { useState } from "react";
+import { useState, Fragment } from "react"; // Importar Fragment
 import { FuncionarioDetails } from "./funcionario-details";
 
 interface FuncionariosTableProps {
@@ -180,9 +180,8 @@ export function FuncionariosTable({
             </TableRow>
           ) : table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => (
-              <>
+              <Fragment key={row.id}>
                 <TableRow
-                  key={row.id}
                   data-state={row.getIsSelected() && "selected"}
                   onClick={row.getToggleExpandedHandler()}
                   className="cursor-pointer"
@@ -200,7 +199,7 @@ export function FuncionariosTable({
                     </TableCell>
                   </TableRow>
                 )}
-              </>
+              </Fragment>
             ))
           ) : (
             <TableRow>
