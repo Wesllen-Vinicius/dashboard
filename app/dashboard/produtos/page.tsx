@@ -1,56 +1,45 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { toast } from 'sonner';
-import { useData } from '@/hooks/use-data';
-import { Produto, Unidade, Categoria } from '@/lib/schemas';
-import { subscribeToProdutos, setProdutoStatus } from '@/lib/services/produtos.services';
-import { ExpandedState } from '@tanstack/react-table';
-import { ProdutosActions } from './components/produtos-actions';
-import { ProdutosTable } from './components/produtos-table';
-import { ProdutoForm } from './components/produtos-form';
-import { DependencyAlert } from '@/components/dependency-alert';
+import { useState, useEffect, useMemo } from "react";
+import { Unsubscribe } from "firebase/firestore";
+import { toast } from "sonner";
+import { motion } from "framer-motion";
+import { ExpandedState, OnChangeFn } from "@tanstack/react-table";
+import { Categoria, Produto, Unidade } from "@/lib/schemas";
+import { useData } from "@/hooks/use-data";
+import { subscribeToProdutos, setProdutoStatus } from "@/lib/services/produtos.services";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { DependencyAlert } from "@/components/dependency-alert";
+import { ProdutosActions } from "./components/produtos-actions";
+
+import { ProdutosTable } from "./components/produtos-table";
+import { ProdutoForm } from "./components/produtos-form";
 
 export default function ProdutosPage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [filteredProdutos, setFilteredProdutos] = useState<Produto[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [expanded, setExpanded] = useState<ExpandedState>({});
-  const [showInactive, setShowInactive] = useState(false);
-
-  const [isDependencyAlertOpen, setIsDependencyAlertOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [produtoToEdit, setProdutoToEdit] = useState<Produto | null>(null);
+  const [idToToggle, setIdToToggle] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [isDependencyAlertOpen, setIsDependencyAlertOpen] = useState(false);
 
-  const { data: unidades, loading: loadingUnidades } = useData<Unidade>('unidades', false);
-  const { data: categorias, loading: loadingCategorias } = useData<Categoria>('categorias', false);
-
-  useEffect(() => {
-    const unsubscribe = subscribeToProdutos(setProdutos, showInactive);
-    return () => unsubscribe();
-  }, [showInactive]);
+  const { data: unidades, loading: loadingUnidades } = useData<Unidade>('unidades');
+  const { data: categorias, loading: loadingCategorias } = useData<Categoria>('categorias');
 
   useEffect(() => {
-    const lowercasedFilter = searchTerm.toLowerCase();
-    const filtered = produtos.filter(item =>
-      item.nome.toLowerCase().includes(lowercasedFilter) ||
-      item.codigo?.toLowerCase().includes(lowercasedFilter) ||
-      searchTerm === ''
-    );
-    setFilteredProdutos(filtered);
-  }, [searchTerm, produtos]);
-
-  const handleAddNew = () => {
-    const missingDependencies = [];
-    if (unidades.filter(u => u.status === 'ativo').length === 0) {
-      missingDependencies.push({ name: 'Unidades de Medida', link: '/dashboard/unidades' });
+    if (!loadingUnidades && !loadingCategorias) {
+      const unsubscribe: Unsubscribe = subscribeToProdutos((data) => {
+        setProdutos(data);
+        setIsLoading(false);
+      });
+      return () => unsubscribe();
     }
-    if (categorias.filter(c => c.status === 'ativo').length === 0) {
-      missingDependencies.push({ name: 'Categorias', link: '/dashboard/categorias' });
-    }
+  }, [loadingUnidades, loadingCategorias]);
 
-    if (missingDependencies.length > 0) {
+  const handleNew = () => {
+    if (unidades.length === 0 || categorias.length === 0) {
       setIsDependencyAlertOpen(true);
       return;
     }
@@ -63,25 +52,51 @@ export default function ProdutosPage() {
     setIsFormOpen(true);
   };
 
-  const handleSetStatus = async (id: string, status: 'ativo' | 'inativo') => {
-    const action = status === 'inativo' ? 'Inativado' : 'Reativado';
-    toast.promise(setProdutoStatus(id, status), {
-      loading: `${action === 'Inativado' ? 'Inativando' : 'Reativando'} produto...`,
-      success: `Produto ${action.toLowerCase()} com sucesso!`,
-      error: `Erro ao ${action.toLowerCase()} o produto.`,
-    });
+  const handleToggle = (id: string) => {
+    setIdToToggle(id);
+    setIsConfirmOpen(true);
   };
 
-  const isLoading = loadingUnidades || loadingCategorias;
+  const confirmStatusToggle = async () => {
+    if (!idToToggle) return;
+    const produto = produtos.find(p => p.id === idToToggle);
+    if (!produto) return;
+    const newStatus = produto.status === "ativo" ? "inativo" : "ativo";
+    const actionText = newStatus === "inativo" ? "inativado" : "reativado";
+    try {
+      await setProdutoStatus(idToToggle, newStatus);
+      toast.success(`Produto ${actionText} com sucesso!`);
+    } catch (e: any) {
+      toast.error(`Erro ao ${actionText} o produto.`, { description: e.message });
+    } finally {
+      setIdToToggle(null);
+      setIsConfirmOpen(false);
+    }
+  };
+
+  // CORREÇÃO: Lógica de expansão simplificada para o padrão da biblioteca, corrigindo o bug.
+  const handleExpansionChange: OnChangeFn<ExpandedState> = (updater) => {
+    setExpanded(updater);
+  };
+
+  const produtoToToggle = produtos.find(p => p.id === idToToggle);
+  const isTogglingToInactive = produtoToToggle?.status === 'ativo';
 
   return (
     <>
+      <ConfirmationDialog
+        open={isConfirmOpen}
+        onOpenChange={setIsConfirmOpen}
+        onConfirm={confirmStatusToggle}
+        title={isTogglingToInactive ? "Confirmar Inativação" : "Confirmar Reativação"}
+        description={`Você tem certeza que deseja ${isTogglingToInactive ? 'inativar' : 'reativar'} este produto?`}
+      />
       <DependencyAlert
         isOpen={isDependencyAlertOpen}
         onOpenChange={setIsDependencyAlertOpen}
         dependencies={[
-          { name: 'Unidades de Medida', link: '/dashboard/unidades' },
-          { name: 'Categorias', link: '/dashboard/categorias' },
+            { name: 'Unidades de Medida', link: '/dashboard/unidades' },
+            { name: 'Categorias', link: '/dashboard/categorias' }
         ]}
       />
       <ProdutoForm
@@ -95,24 +110,15 @@ export default function ProdutosPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <ProdutosActions
-          onAdd={handleAddNew}
-          onSearch={setSearchTerm}
-          showInactive={showInactive}
-          onShowInactiveChange={setShowInactive}
+        <ProdutosActions onNew={handleNew} />
+        <ProdutosTable
+          produtos={produtos}
+          isLoading={isLoading || loadingUnidades || loadingCategorias}
+          onEdit={handleEdit}
+          onToggle={handleToggle}
+          expanded={expanded}
+          onExpandedChange={handleExpansionChange}
         />
-        {isLoading ? (
-          <p>Carregando dados...</p>
-        ) : (
-          <ProdutosTable
-            data={filteredProdutos}
-            unidades={unidades}
-            onEdit={handleEdit}
-            onSetStatus={handleSetStatus}
-            expanded={expanded}
-            onExpandedChange={setExpanded}
-          />
-        )}
       </motion.div>
     </>
   );

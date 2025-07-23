@@ -1,138 +1,227 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-
-import { Produto, produtoSchema, Unidade, Categoria } from "@/lib/schemas";
-import { useData } from "@/hooks/use-data";
+import { useDataStore } from "@/store/data.store";
+import { Produto, produtoSchema } from "@/lib/schemas";
 import { addProduto, updateProduto } from "@/lib/services/produtos.services";
-
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Combobox } from "@/components/ui/combobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+import { IconArrowLeft, IconArrowRight } from "@tabler/icons-react";
+import { Progress } from "@/components/ui/progress";
 
-type ProdutoFormValues = z.infer<typeof produtoSchema>;
+interface FormProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  produtoToEdit?: Produto | null;
+}
 
-export function ProdutoForm({ isOpen, onOpenChange, produtoToEdit }: {
-    isOpen: boolean;
-    onOpenChange: (open: boolean) => void;
-    produtoToEdit?: Produto | null;
-}) {
-    const { data: unidades } = useData<Unidade>('unidades');
-    const { data: categorias } = useData<Categoria>('categorias');
-    const isEditing = !!produtoToEdit;
+// Schema flexível para o formulário
+const formSchema = z.object({
+    tipoProduto: z.enum(["VENDA", "USO_INTERNO", "MATERIA_PRIMA"]),
+    nome: z.string().min(3, "O nome/descrição é obrigatório."),
+    custoUnitario: z.coerce.number().min(0, "O custo não pode ser negativo."),
+    unidadeId: z.string().optional(),
+    precoVenda: z.coerce.number().optional(),
+    sku: z.string().optional(),
+    ncm: z.string().optional(),
+    cfop: z.string().optional(),
+    cest: z.string().optional(),
+    categoriaId: z.string().optional(),
+});
 
-    const form = useForm<ProdutoFormValues>({
-        resolver: zodResolver(produtoSchema),
-        defaultValues: isEditing ? produtoToEdit : {
+type FormValues = z.infer<typeof formSchema>;
+
+export function ProdutoForm({
+  isOpen,
+  onOpenChange,
+  produtoToEdit,
+}: FormProps) {
+  const isEditing = !!produtoToEdit;
+  const [currentStep, setCurrentStep] = useState(0);
+  const { unidades, categorias } = useDataStore();
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    mode: 'onChange',
+  });
+
+  const tipoProduto = form.watch("tipoProduto");
+
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(0);
+      if (isEditing && produtoToEdit) {
+        // CORREÇÃO: Garante que todos os campos tenham um valor padrão definido
+        form.reset({
+          tipoProduto: produtoToEdit.tipoProduto,
+          nome: produtoToEdit.nome || "",
+          custoUnitario: produtoToEdit.custoUnitario || 0,
+          unidadeId: 'unidadeId' in produtoToEdit ? produtoToEdit.unidadeId : "",
+          precoVenda: 'precoVenda' in produtoToEdit ? produtoToEdit.precoVenda : 0,
+          sku: 'sku' in produtoToEdit ? produtoToEdit.sku : "",
+          ncm: 'ncm' in produtoToEdit ? produtoToEdit.ncm : "",
+          cfop: 'cfop' in produtoToEdit ? produtoToEdit.cfop : "",
+          cest: 'cest' in produtoToEdit ? produtoToEdit.cest : "",
+          categoriaId: 'categoriaId' in produtoToEdit ? produtoToEdit.categoriaId : "",
+        });
+      } else {
+        // CORREÇÃO: Define valores iniciais para todos os campos para evitar 'undefined'
+        form.reset({
+          tipoProduto: "VENDA",
+          nome: "",
+          custoUnitario: 0,
+          unidadeId: "",
+          precoVenda: 0,
+          sku: "",
+          ncm: "",
+          cfop: "",
+          cest: "",
+          categoriaId: "",
+        });
+      }
+    }
+  }, [isOpen, produtoToEdit, isEditing, form]);
+
+  const steps = [
+    { id: 1, name: "Tipo de Produto", fields: ["tipoProduto"]},
+    { id: 2, name: "Detalhes do Produto", fields: ["nome", "custoUnitario", "unidadeId", "precoVenda", "categoriaId"]},
+    { id: 3, name: "Informações Fiscais", fields: ["ncm", "cfop"]}
+  ];
+
+  const activeSteps = tipoProduto === 'VENDA' ? steps : steps.slice(0, 2);
+
+  const nextStep = async () => {
+    const fieldsToValidate = activeSteps[currentStep].fields as (keyof FormValues)[];
+    const output = await form.trigger(fieldsToValidate, { shouldFocus: true });
+
+    if (output && currentStep < activeSteps.length - 1) {
+      setCurrentStep(step => step + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 0) setCurrentStep(step => step - 1);
+  };
+
+  const onSubmit = async (values: FormValues) => {
+    try {
+      let dataToSubmit: Omit<Produto, "id" | "status" | "createdAt" | "quantidade">;
+
+      switch (values.tipoProduto) {
+        case 'VENDA':
+          dataToSubmit = {
             tipoProduto: 'VENDA',
-            nome: '',
-            custoUnitario: 0,
-            precoVenda: 0,
-            unidadeId: '',
-            ncm: '',
-            cfop: '',
-        },
-    });
+            nome: values.nome,
+            custoUnitario: values.custoUnitario,
+            unidadeId: values.unidadeId!,
+            precoVenda: values.precoVenda!,
+            ncm: values.ncm!,
+            cfop: values.cfop!,
+            sku: values.sku || "",
+            cest: values.cest || "",
+          };
+          break;
+        case 'USO_INTERNO':
+          dataToSubmit = {
+            tipoProduto: 'USO_INTERNO',
+            nome: values.nome,
+            custoUnitario: values.custoUnitario,
+            categoriaId: values.categoriaId!,
+          };
+          break;
+        case 'MATERIA_PRIMA':
+          dataToSubmit = {
+            tipoProduto: 'MATERIA_PRIMA',
+            nome: values.nome,
+            custoUnitario: values.custoUnitario,
+            unidadeId: values.unidadeId!,
+          };
+          break;
+        default:
+          throw new Error("Tipo de produto inválido");
+      }
 
-    const tipoProduto = form.watch('tipoProduto');
+      produtoSchema.parse(dataToSubmit);
 
-    const onSubmit = async (values: ProdutoFormValues) => {
-        try {
-            if (isEditing && produtoToEdit?.id) {
-                await updateProduto(produtoToEdit.id, values);
-                toast.success("Produto atualizado com sucesso!");
-            } else {
-                await addProduto(values as Omit<Produto, 'id' | 'status' | 'createdAt' | 'quantidade'>);
-                toast.success("Novo produto registrado com sucesso!");
-            }
-            form.reset();
-            onOpenChange(false);
-        } catch (error: any) {
-            toast.error("Falha ao salvar o produto.", { description: error.message });
-        }
-    };
+      if (isEditing && produtoToEdit?.id) {
+        await updateProduto(produtoToEdit.id, dataToSubmit);
+        toast.success("Produto atualizado com sucesso!");
+      } else {
+        await addProduto(dataToSubmit as any);
+        toast.success("Novo produto adicionado!");
+      }
+      onOpenChange(false);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        toast.error("Erro de validação.", { description: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(' | ') });
+      } else {
+        toast.error("Falha ao salvar o produto.", { description: error.message });
+      }
+    }
+  };
 
-    return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-2xl">
-                <DialogHeader>
-                    <DialogTitle>{isEditing ? "Editar Produto" : "Novo Produto"}</DialogTitle>
-                    <DialogDescription>Preencha os detalhes do produto.</DialogDescription>
-                </DialogHeader>
-                <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} id="produto-form" className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-2">
+  const progress = ((currentStep + 1) / activeSteps.length) * 100;
 
-                        <FormField
-                            name="tipoProduto"
-                            control={form.control}
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Tipo de Produto *</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isEditing}>
-                                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                        <SelectContent>
-                                            <SelectItem value="VENDA">Produto para Venda</SelectItem>
-                                            <SelectItem value="USO_INTERNO">Item de Uso Interno</SelectItem>
-                                            <SelectItem value="MATERIA_PRIMA">Matéria-Prima</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-
-                        <FormField name="nome" control={form.control} render={({ field }) => (
-                            <FormItem><FormLabel>Nome / Descrição *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                        )}/>
-
-                        {tipoProduto === 'VENDA' && (
-                             <>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <FormField name="precoVenda" control={form.control} render={({ field }) => (<FormItem><FormLabel>Preço de Venda *</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>)}/>
-                                    <FormField name="custoUnitario" control={form.control} render={({ field }) => (<FormItem><FormLabel>Custo Unitário</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>)}/>
-                                </div>
-                                <FormField name="unidadeId" control={form.control} render={({ field }) => (<FormItem><FormLabel>Unidade de Medida *</FormLabel><Combobox options={unidades.map(u => ({ label: `${u.nome} (${u.sigla})`, value: u.id! }))} {...field} placeholder="Selecione uma unidade" /><FormMessage /></FormItem>)}/>
-                                <Separator />
-                                <h4 className="text-md font-medium">Informações Fiscais</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <FormField name="ncm" control={form.control} render={({ field }) => (<FormItem><FormLabel>NCM *</FormLabel><FormControl><Input {...field} maxLength={8} /></FormControl><FormMessage /></FormItem>)}/>
-                                    <FormField name="cfop" control={form.control} render={({ field }) => (<FormItem><FormLabel>CFOP *</FormLabel><FormControl><Input {...field} maxLength={4} /></FormControl><FormMessage /></FormItem>)}/>
-                                    <FormField name="sku" control={form.control} render={({ field }) => (<FormItem><FormLabel>SKU (Código Interno)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
-                                    <FormField name="cest" control={form.control} render={({ field }) => (<FormItem><FormLabel>CEST</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
-                                </div>
-                             </>
-                        )}
-
-                        {tipoProduto === 'USO_INTERNO' && (
-                            <>
-                                <FormField name="custoUnitario" control={form.control} render={({ field }) => (<FormItem><FormLabel>Custo Unitário *</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>)}/>
-                                <FormField name="categoriaId" control={form.control} render={({ field }) => (<FormItem><FormLabel>Categoria *</FormLabel><Combobox options={categorias.map(c => ({ label: c.nome, value: c.id! }))} {...field} placeholder="Selecione uma categoria" /><FormMessage /></FormItem>)}/>
-                            </>
-                        )}
-
-                        {tipoProduto === 'MATERIA_PRIMA' && (
-                             <>
-                                <FormField name="custoUnitario" control={form.control} render={({ field }) => (<FormItem><FormLabel>Custo Unitário</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>)}/>
-                                <FormField name="unidadeId" control={form.control} render={({ field }) => (<FormItem><FormLabel>Unidade de Medida *</FormLabel><Combobox options={unidades.map(u => ({ label: `${u.nome} (${u.sigla})`, value: u.id! }))} {...field} placeholder="Selecione uma unidade" /><FormMessage /></FormItem>)}/>
-                             </>
-                        )}
-
-                    </form>
-                </Form>
-                <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-                    <Button type="submit" form="produto-form" disabled={form.formState.isSubmitting}>
-                        {form.formState.isSubmitting ? "Salvando..." : "Salvar Produto"}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{isEditing ? "Editar Produto" : "Novo Produto"}</DialogTitle>
+          <DialogDescription>Siga os passos para cadastrar o produto.</DialogDescription>
+        </DialogHeader>
+        <Progress value={progress} className="w-full h-2 mt-2" />
+        <Form {...form}>
+          <form id="produto-form" onSubmit={form.handleSubmit(onSubmit)} className="py-4 min-h-[380px]">
+            <AnimatePresence mode="wait">
+              <motion.div key={currentStep} initial={{ x: 30, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -30, opacity: 0 }} transition={{ duration: 0.3 }}>
+                {currentStep === 0 && (
+                  <div className="space-y-4"><h3 className="text-lg font-semibold">{activeSteps[0].name}</h3>
+                    <FormField name="tipoProduto" control={form.control} render={({ field }) => (<FormItem><FormLabel>Selecione o tipo do produto</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isEditing}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent><SelectItem value="VENDA">Produto para Venda</SelectItem><SelectItem value="USO_INTERNO">Uso Interno / Consumo</SelectItem><SelectItem value="MATERIA_PRIMA">Matéria-Prima</SelectItem></SelectContent></Select><FormMessage/></FormItem>)}/>
+                  </div>
+                )}
+                {currentStep === 1 && (
+                  <div className="space-y-4"><h3 className="text-lg font-semibold">{activeSteps[1].name}</h3>
+                    <FormField name="nome" control={form.control} render={({ field }) => (<FormItem><FormLabel>Nome / Descrição</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>)}/>
+                    { (tipoProduto === 'VENDA' || tipoProduto === 'MATERIA_PRIMA') && <FormField name="unidadeId" control={form.control} render={({ field }) => (<FormItem><FormLabel>Unidade de Medida</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger></FormControl><SelectContent>{unidades.map(u => <SelectItem key={u.id} value={u.id!}>{u.nome} ({u.sigla})</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/> }
+                    { tipoProduto === 'USO_INTERNO' && <FormField name="categoriaId" control={form.control} render={({ field }) => (<FormItem><FormLabel>Categoria</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione..."/></SelectTrigger></FormControl><SelectContent>{categorias.map(c => <SelectItem key={c.id} value={c.id!}>{c.nome}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/> }
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField name="custoUnitario" control={form.control} render={({ field }) => (<FormItem><FormLabel>Custo Unitário</FormLabel><FormControl><Input type="number" step="0.01" {...field}/></FormControl><FormMessage/></FormItem>)}/>
+                      { tipoProduto === 'VENDA' && <FormField name="precoVenda" control={form.control} render={({ field }) => (<FormItem><FormLabel>Preço de Venda</FormLabel><FormControl><Input type="number" step="0.01" {...field}/></FormControl><FormMessage/></FormItem>)}/> }
+                    </div>
+                  </div>
+                )}
+                 {currentStep === 2 && tipoProduto === 'VENDA' && (
+                  <div className="space-y-4"><h3 className="text-lg font-semibold">{activeSteps[2].name}</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField name="ncm" control={form.control} render={({ field }) => (<FormItem><FormLabel>NCM</FormLabel><FormControl><Input {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+                      <FormField name="cfop" control={form.control} render={({ field }) => (<FormItem><FormLabel>CFOP</FormLabel><FormControl><Input {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+                    </div>
+                     <div className="grid grid-cols-2 gap-4">
+                      <FormField name="sku" control={form.control} render={({ field }) => (<FormItem><FormLabel>SKU (Opcional)</FormLabel><FormControl><Input {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+                      <FormField name="cest" control={form.control} render={({ field }) => (<FormItem><FormLabel>CEST (Opcional)</FormLabel><FormControl><Input {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </form>
+        </Form>
+        <DialogFooter className="mt-6 pt-4 border-t">
+          <div className="flex justify-between w-full">
+            <Button type="button" variant="outline" onClick={prevStep} disabled={currentStep === 0}><IconArrowLeft className="h-4 w-4 mr-2"/>Voltar</Button>
+            {currentStep < activeSteps.length - 1 && (<Button type="button" onClick={nextStep}>Avançar<IconArrowRight className="h-4 w-4 ml-2"/></Button>)}
+            {currentStep === activeSteps.length - 1 && (<Button type="submit" form="produto-form" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? "Salvando..." : (isEditing ? "Salvar Alterações" : "Finalizar")}</Button>)}
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }

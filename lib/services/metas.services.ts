@@ -1,37 +1,76 @@
 import { db } from "@/lib/firebase";
-import { collection, addDoc, onSnapshot, doc, updateDoc, QuerySnapshot, DocumentData, serverTimestamp, query, where } from "firebase/firestore";
-import { Meta } from "@/lib/schemas";
+import {
+  collection,
+  onSnapshot,
+  doc,
+  updateDoc,
+  query,
+  orderBy,
+  QuerySnapshot,
+  DocumentData,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { Meta, metaSchema } from "@/lib/schemas";
+import { z } from "zod";
 
-export const addMeta = async (meta: Omit<Meta, "id" | "produtoNome" | "unidade" | "createdAt" | "status">) => {
-  try {
-    const dataWithTimestamp = { ...meta, status: 'ativo', createdAt: serverTimestamp() };
-    const docRef = await addDoc(collection(db, "metas"), dataWithTimestamp);
-    return docRef.id;
-  } catch (e) {
-    console.error("Erro ao adicionar meta: ", e);
-    throw new Error("Não foi possível adicionar a meta.");
-  }
-};
+const metasCollection = collection(db, "metas");
 
-export const subscribeToMetas = (callback: (metas: Meta[]) => void) => {
-  const q = query(collection(db, "metas"), where("status", "==", "ativo"));
+export const subscribeToMetas = (
+  callback: (metas: Meta[]) => void
+) => {
+  const q = query(metasCollection, orderBy("createdAt", "desc"));
 
-  const unsubscribe = onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    const metas: Meta[] = [];
+  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
+    const data: Meta[] = [];
     querySnapshot.forEach((doc) => {
-      metas.push({ id: doc.id, ...doc.data() as Omit<Meta, 'id'> });
+      data.push({ id: doc.id, ...doc.data() } as Meta);
     });
-    callback(metas);
+    callback(data);
   });
-  return unsubscribe;
 };
 
-export const updateMeta = async (id: string, meta: Partial<Omit<Meta, "id" | "produtoNome" | "unidade" | "createdAt" | "status">>) => {
-  const metaDoc = doc(db, "metas", id);
-  await updateDoc(metaDoc, meta);
+export const addMeta = async (
+  data: Omit<Meta, "id" | "status" | "createdAt">
+) => {
+  // CORREÇÃO: Validar apenas os campos do schema base
+  const parsedData = metaSchema.pick({ produtoId: true, metaPorAnimal: true }).parse(data);
+  const dataComTimestamp = {
+    ...parsedData,
+    // Adicionar os campos desnormalizados manualmente
+    produtoNome: data.produtoNome,
+    unidade: data.unidade,
+    status: "ativo" as const,
+    createdAt: serverTimestamp(),
+  };
+  const docRef = await addDoc(metasCollection, dataComTimestamp);
+  return docRef.id;
 };
 
-export const setMetaStatus = async (id: string, status: 'ativo' | 'inativo') => {
-    const metaDoc = doc(db, "metas", id);
-    await updateDoc(metaDoc, { status });
+export const updateMeta = async (
+  id: string,
+  data: Partial<Omit<Meta, "id" | "status" | "createdAt">>
+) => {
+  // CORREÇÃO: Validar apenas os campos do schema base
+  const parsedData = metaSchema.pick({ produtoId: true, metaPorAnimal: true }).partial().parse(data);
+  const dataToUpdate: Partial<Meta> = { ...parsedData };
+
+  // Adicionar os campos desnormalizados se eles existirem nos dados de entrada
+  if (data.produtoNome) {
+    dataToUpdate.produtoNome = data.produtoNome;
+  }
+  if (data.unidade) {
+    dataToUpdate.unidade = data.unidade;
+  }
+
+  const docRef = doc(db, "metas", id);
+  await updateDoc(docRef, dataToUpdate);
+};
+
+export const setMetaStatus = async (
+  id: string,
+  status: "ativo" | "inativo"
+) => {
+  const docRef = doc(db, "metas", id);
+  await updateDoc(docRef, { status });
 };

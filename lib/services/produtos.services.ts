@@ -1,48 +1,64 @@
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, doc, updateDoc, serverTimestamp, Query, query, where, QuerySnapshot, DocumentData, Timestamp, addDoc } from "firebase/firestore";
+import {
+  collection,
+  onSnapshot,
+  doc,
+  updateDoc,
+  query,
+  orderBy,
+  QuerySnapshot,
+  DocumentData,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 import { Produto, produtoSchema } from "@/lib/schemas";
 
+const produtosCollection = collection(db, "produtos");
+
 export const subscribeToProdutos = (
-  callback: (produtos: Produto[]) => void,
-  includeInactive: boolean = false
+  callback: (produtos: Produto[]) => void
 ) => {
-  const q = query(collection(db, "produtos"));
+  const q = query(produtosCollection, orderBy("nome"));
 
   return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    const produtos: Produto[] = [];
+    const data: Produto[] = [];
     querySnapshot.forEach((doc) => {
-      const docData = doc.data();
-      const dataToParse = { id: doc.id, ...docData };
-
-      const parsed = produtoSchema.safeParse(dataToParse);
-      if (parsed.success) {
-        produtos.push(parsed.data);
-      } else {
-        console.error("Documento de produto inválido:", doc.id, parsed.error.format());
-      }
+      data.push({ id: doc.id, ...doc.data() } as Produto);
     });
-
-    const filteredData = includeInactive ? produtos : produtos.filter(p => p.status === 'ativo');
-    callback(filteredData.sort((a, b) => a.nome.localeCompare(b.nome)));
-  }, (error) => {
-    console.error("Erro no listener de Produtos:", error);
+    callback(data);
   });
 };
 
-export const addProduto = async (produtoData: Omit<Produto, 'id' | 'status' | 'createdAt' | 'quantidade'>) => {
-    const dataToSave = {
-        ...produtoData,
-        quantidade: 0, // Estoque inicial é sempre 0
-        status: 'ativo',
-        createdAt: serverTimestamp(),
-    };
-    await addDoc(collection(db, "produtos"), dataToSave);
+export const addProduto = async (
+  data: Omit<Produto, "id" | "status" | "createdAt" | "quantidade">
+) => {
+  // A validação completa garante que o objeto corresponda a um dos tipos de produto.
+  const parsedData = produtoSchema.parse(data);
+
+  const dataComTimestamp = {
+    ...parsedData,
+    quantidade: 0,
+    status: "ativo" as const,
+    createdAt: serverTimestamp(),
+  };
+  const docRef = await addDoc(produtosCollection, dataComTimestamp);
+  return docRef.id;
 };
 
-export const updateProduto = async (id: string, produtoData: Partial<Omit<Produto, 'id'>>) => {
-    await updateDoc(doc(db, "produtos", id), produtoData);
+export const updateProduto = async (
+  id: string,
+  data: Partial<Omit<Produto, "id" | "status" | "createdAt" | "quantidade">>
+) => {
+  // CORREÇÃO: Removemos a validação .partial() que causava o erro.
+  // A função updateDoc do Firestore já lida com atualizações parciais.
+  const docRef = doc(db, "produtos", id);
+  await updateDoc(docRef, data);
 };
 
-export const setProdutoStatus = async (id: string, status: 'ativo' | 'inativo') => {
-    await updateDoc(doc(db, "produtos", id), { status });
+export const setProdutoStatus = async (
+  id: string,
+  status: "ativo" | "inativo"
+) => {
+  const docRef = doc(db, "produtos", id);
+  await updateDoc(docRef, { status });
 };

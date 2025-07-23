@@ -1,202 +1,119 @@
-"use client"
+"use client";
 
-import { useState, useMemo, useCallback } from "react";
-import { useForm, SubmitHandler } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { ColumnDef, Row } from "@tanstack/react-table";
+import { useState, useEffect, useMemo } from "react";
+import { Unsubscribe } from "firebase/firestore";
 import { toast } from "sonner";
-import { IconPencil, IconTrash, IconAlertTriangle } from "@tabler/icons-react";
-import Link from "next/link";
-
-import { CrudLayout } from "@/components/crud-layout";
-import { GenericForm } from "@/components/generic-form";
-import { GenericTable } from "@/components/generic-table";
-import { Button } from "@/components/ui/button";
-import { FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Meta, metaSchema } from "@/lib/schemas";
-import { addMeta, updateMeta, setMetaStatus } from "@/lib/services/metas.services";
-import { Combobox } from "@/components/ui/combobox";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { useDataStore } from "@/store/data.store";
-import { useAuthStore } from "@/store/auth.store";
-import z from "zod";
-import { DetailsSubRow } from "@/components/details-sub-row";
-
-type MetaFormValues = z.infer<typeof metaSchema>;
-type MetaComDetalhes = Meta & { produtoNome?: string; unidade?: string };
+import { motion } from "framer-motion";
+import { Meta, Produto } from "@/lib/schemas";
+import { useData } from "@/hooks/use-data";
+import { subscribeToMetas, setMetaStatus } from "@/lib/services/metas.services";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { DependencyAlert } from "@/components/dependency-alert";
+import { MetasActions } from "./components/metas-actions";
+import { MetaForm } from "./components/meta-form";
+import { MetasTable } from "./components/metas-table";
 
 export default function MetasPage() {
-    const { metas, produtos, unidades } = useDataStore();
-    const { role } = useAuthStore();
-    const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [metas, setMetas] = useState<Meta[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [metaToEdit, setMetaToEdit] = useState<Meta | null>(null);
+  const [idToToggle, setIdToToggle] = useState<string | null>(null);
+  const [isDependencyAlertOpen, setIsDependencyAlertOpen] = useState(false);
 
-    const form = useForm<MetaFormValues>({
-        resolver: zodResolver(metaSchema),
-        defaultValues: { produtoId: "", metaPorAnimal: 0 },
-    });
+  // Carrega apenas os produtos de venda ativos, que são a dependência deste módulo.
+  const { data: produtos, loading: loadingProdutos } = useData<Produto>('produtos');
+  const produtosDeVenda = useMemo(() => produtos.filter(p => p.tipoProduto === 'VENDA'), [produtos]);
 
-    const produtosParaVendaOptions = useMemo(() =>
-        produtos
-            .filter(p => p.tipoProduto === 'VENDA')
-            .map(p => ({ label: p.nome, value: p.id! })),
-    [produtos]);
+  useEffect(() => {
+    // A busca de metas só começa depois que os produtos (dependência) forem carregados.
+    if (!loadingProdutos) {
+      const unsubscribe: Unsubscribe = subscribeToMetas((data) => {
+        setMetas(data);
+        setIsLoading(false);
+      });
+      return () => unsubscribe();
+    }
+  }, [loadingProdutos]);
 
-    const dependenciasFaltantes = useMemo(() => {
-        if (produtos.filter(p => p.tipoProduto === 'VENDA').length === 0) {
-            return [{ nome: "Produtos de Venda", link: "/dashboard/produtos" }];
-        }
-        return [];
-    }, [produtos]);
+  const handleNew = () => {
+    // REGRA DE NEGÓCIO APRIMORADA:
+    // Verifica se existe pelo menos um produto de venda ativo antes de abrir o formulário.
+    if (produtosDeVenda.length === 0) {
+      setIsDependencyAlertOpen(true);
+      return;
+    }
+    setMetaToEdit(null);
+    setIsFormOpen(true);
+  };
 
-    const metasComDetalhes: MetaComDetalhes[] = useMemo(() => {
-        return metas.map((meta: Meta) => {
-            const produtoAssociado = produtos.find(p => p.id === meta.produtoId);
-            let unidadeNome = "N/A";
-            if (produtoAssociado?.tipoProduto === 'VENDA' && produtoAssociado.unidadeId) {
-                unidadeNome = unidades.find(u => u.id === produtoAssociado.unidadeId)?.sigla || "N/A";
-            }
+  const handleEdit = (meta: Meta) => {
+    setMetaToEdit(meta);
+    setIsFormOpen(true);
+  };
 
-            return {
-                ...meta,
-                produtoNome: produtoAssociado?.nome || "N/A",
-                unidade: unidadeNome,
-            };
-        });
-    }, [metas, produtos, unidades]);
+  const handleToggle = (id: string) => {
+    setIdToToggle(id);
+    setIsConfirmOpen(true);
+  };
 
-    const handleEdit = (meta: Meta) => {
-        form.reset(meta);
-        setIsEditing(true);
-    };
+  const confirmStatusToggle = async () => {
+    if (!idToToggle) return;
+    const meta = metas.find(m => m.id === idToToggle);
+    if (!meta) return;
 
-    const handleInactivate = async (id: string) => {
-        if (!confirm("Tem certeza que deseja inativar esta meta?")) return;
-        try {
-            await setMetaStatus(id, 'inativo');
-            toast.success("Meta inativada com sucesso!");
-        } catch {
-            toast.error("Erro ao inativar a meta.");
-        }
-    };
+    const newStatus = meta.status === "ativo" ? "inativo" : "ativo";
+    const actionText = newStatus === "inativo" ? "inativada" : "reativada";
 
-    const resetForm = () => {
-        form.reset({ id: "", produtoId: "", metaPorAnimal: 0 });
-        setIsEditing(false);
-    };
+    try {
+      await setMetaStatus(idToToggle, newStatus);
+      toast.success(`Meta ${actionText} com sucesso!`);
+    } catch (e: any) {
+      toast.error(`Erro ao ${actionText} a meta.`, { description: e.message });
+    } finally {
+      setIdToToggle(null);
+      setIsConfirmOpen(false);
+    }
+  };
 
-    const onSubmit: SubmitHandler<MetaFormValues> = async (values) => {
-        try {
-            const { id, ...data } = values;
-            if (isEditing && id) {
-                await updateMeta(id, data);
-                toast.success("Meta atualizada com sucesso!");
-            } else {
-                await addMeta(data);
-                toast.success("Meta cadastrada com sucesso!");
-            }
-            resetForm();
-        } catch {
-            toast.error("Ocorreu um erro ao salvar a meta.");
-        }
-    };
+  const metaToToggle = metas.find(m => m.id === idToToggle);
+  const isTogglingToInactive = metaToToggle?.status === 'ativo';
 
-    const renderSubComponent = useCallback(({ row }: { row: Row<MetaComDetalhes> }) => {
-        const meta = row.original;
-        const details = [
-            { label: "Unidade", value: meta.unidade }
-        ];
-        return <DetailsSubRow details={details} />;
-    }, []);
-
-    const columns: ColumnDef<MetaComDetalhes>[] = [
-        { accessorKey: "produtoNome", header: "Produto" },
-        { accessorKey: "metaPorAnimal", header: "Meta por Animal" },
-        {
-            id: "actions",
-            cell: ({ row }) => {
-                const isEditable = role === 'ADMINISTRADOR';
-
-                return (
-                    <div className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(row.original)} disabled={!isEditable}>
-                            <IconPencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleInactivate(row.original.id!)} disabled={!isEditable}>
-                            <IconTrash className="h-4 w-4" />
-                        </Button>
-                    </div>
-                );
-            }
-        },
-    ];
-
-    const formContent = (
-        dependenciasFaltantes.length > 0 && !isEditing ? (
-            <Alert variant="destructive">
-                <IconAlertTriangle className="h-4 w-4" />
-                <AlertTitle>Cadastro de pré-requisito necessário</AlertTitle>
-                <AlertDescription>
-                    Para registrar uma meta, você precisa primeiro cadastrar:
-                    <ul className="list-disc pl-5 mt-2">
-                        {dependenciasFaltantes.map(dep => (
-                            <li key={dep.nome}>
-                                <Button variant="link" asChild className="p-0 h-auto font-bold">
-                                    <Link href={dep.link}>{dep.nome}</Link>
-                                </Button>
-                            </li>
-                        ))}
-                    </ul>
-                </AlertDescription>
-            </Alert>
-        ) : (
-            <GenericForm schema={metaSchema} onSubmit={onSubmit} formId="meta-form" form={form}>
-                <div className="space-y-4">
-                    <FormField
-                        name="produtoId"
-                        control={form.control}
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Produto</FormLabel>
-                                <Combobox
-                                    options={produtosParaVendaOptions}
-                                    value={field.value}
-                                    onChange={field.onChange}
-                                    placeholder="Selecione um produto de venda"
-                                    searchPlaceholder="Buscar produto..."
-                                />
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                     <FormField name="metaPorAnimal" control={form.control} render={({ field }) => (
-                        <FormItem><FormLabel>Meta por Animal</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                </div>
-                <div className="flex justify-end gap-2 pt-6">
-                    {isEditing && (<Button type="button" variant="outline" onClick={resetForm}>Cancelar</Button>)}
-                    <Button type="submit" form="meta-form">{isEditing ? "Salvar Alterações" : "Cadastrar"}</Button>
-                </div>
-            </GenericForm>
-        )
-    );
-
-    const tableContent = (
-        <GenericTable
-            columns={columns}
-            data={metasComDetalhes}
-            filterPlaceholder="Filtrar por produto..."
-            filterColumnId="produtoNome"
-            renderSubComponent={renderSubComponent}
+  return (
+    <>
+      <ConfirmationDialog
+        open={isConfirmOpen}
+        onOpenChange={setIsConfirmOpen}
+        onConfirm={confirmStatusToggle}
+        title={isTogglingToInactive ? "Confirmar Inativação" : "Confirmar Reativação"}
+        description={`Você tem certeza que deseja ${isTogglingToInactive ? 'inativar' : 'reativar'} esta meta?`}
+      />
+      <DependencyAlert
+        isOpen={isDependencyAlertOpen}
+        onOpenChange={setIsDependencyAlertOpen}
+        dependencies={[{ name: 'Produtos de Venda', link: '/dashboard/produtos' }]}
+      />
+      <MetaForm
+        isOpen={isFormOpen}
+        onOpenChange={setIsFormOpen}
+        metaToEdit={metaToEdit}
+        produtosDeVenda={produtosDeVenda}
+      />
+      <motion.div
+        className="space-y-6"
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <MetasActions onNew={handleNew} />
+        <MetasTable
+          metas={metas}
+          isLoading={isLoading || loadingProdutos}
+          onEdit={handleEdit}
+          onToggle={handleToggle}
         />
-    );
-
-    return (
-        <CrudLayout
-            formTitle={isEditing ? "Editar Meta" : "Nova Meta de Produção"}
-            formContent={formContent}
-            tableTitle="Metas Cadastradas"
-            tableContent={tableContent}
-        />
-    );
+      </motion.div>
+    </>
+  );
 }
