@@ -1,42 +1,58 @@
-// lib/services/roles.services.ts
 import { db } from "@/lib/firebase";
 import {
-    collection,
-    addDoc,
-    onSnapshot,
-    doc,
-    updateDoc,
-    deleteDoc,
-    serverTimestamp,
-    QuerySnapshot,
-    DocumentData,
-    query,
-    where
+  collection,
+  onSnapshot,
+  doc,
+  updateDoc,
+  query,
+  orderBy,
+  QuerySnapshot,
+  DocumentData,
+  addDoc,
+  serverTimestamp,
+  deleteDoc,
 } from "firebase/firestore";
-import { Role } from "@/lib/schemas";
+import { Role, roleSchema } from "@/lib/schemas";
+import { z } from "zod";
 
-export const addRole = (data: Omit<Role, 'id' | 'createdAt' | 'status'>) => {
-    const dataWithTimestamp = { ...data, status: 'ativo', createdAt: serverTimestamp() };
-    return addDoc(collection(db, "roles"), dataWithTimestamp);
-};
+const rolesCollection = collection(db, "roles");
 
-export const updateRole = (id: string, data: Partial<Omit<Role, 'id' | 'createdAt' | 'status'>>) => {
-    const roleDoc = doc(db, "roles", id);
-    return updateDoc(roleDoc, data);
-};
+export const subscribeToRoles = (
+  callback: (roles: Role[]) => void
+) => {
+  const q = query(rolesCollection, orderBy("nome"));
 
-export const setRoleStatus = (id: string, status: 'ativo' | 'inativo') => {
-    const roleDoc = doc(db, "roles", id);
-    return updateDoc(roleDoc, { status });
-};
-
-export const subscribeToRoles = (callback: (roles: Role[]) => void) => {
-    const q = query(collection(db, "roles"), where("status", "==", "ativo"));
-    return onSnapshot(q, (snapshot: QuerySnapshot<DocumentData>) => {
-        const roles: Role[] = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as Role));
-        callback(roles);
+  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
+    const data: Role[] = [];
+    querySnapshot.forEach((doc) => {
+      data.push({ id: doc.id, ...doc.data() } as Role);
     });
+    callback(data);
+  });
+};
+
+export const addRole = async (
+  data: Omit<Role, "id">
+) => {
+  const parsedData = roleSchema.omit({ id: true }).parse(data);
+  const dataComTimestamp = {
+    ...parsedData,
+    createdAt: serverTimestamp(),
+  };
+  const docRef = await addDoc(rolesCollection, dataComTimestamp);
+  return docRef.id;
+};
+
+export const updateRole = async (
+  id: string,
+  data: Partial<Omit<Role, "id">>
+) => {
+  const parsedData = roleSchema.omit({ id: true }).partial().parse(data);
+  const docRef = doc(db, "roles", id);
+  await updateDoc(docRef, parsedData);
+};
+
+export const deleteRole = async (id: string) => {
+  const docRef = doc(db, "roles", id);
+  await deleteDoc(docRef);
 };
