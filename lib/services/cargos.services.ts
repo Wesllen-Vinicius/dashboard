@@ -1,38 +1,60 @@
-import { db } from "../firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp } from "firebase/firestore";
-import { Cargo } from "../schemas";
+import { db } from "@/lib/firebase";
+import {
+  collection,
+  onSnapshot,
+  doc,
+  updateDoc,
+  query,
+  orderBy,
+  QuerySnapshot,
+  DocumentData,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { Cargo, cargoSchema } from "@/lib/schemas";
 
-export const addCargo = async (cargo: Omit<Cargo, 'id' | 'createdAt' | 'status'>) => {
-  const dataWithTimestamp = { ...cargo, status: 'ativo', createdAt: serverTimestamp() };
-  await addDoc(collection(db, "cargos"), dataWithTimestamp);
-};
-
-export const updateCargo = async (id: string, cargo: Partial<Omit<Cargo, 'id' | 'createdAt' | 'status'>>) => {
-  const cargoDoc = doc(db, "cargos", id);
-  await updateDoc(cargoDoc, cargo);
-};
-
-export const setCargoStatus = async (id: string, status: 'ativo' | 'inativo') => {
-  const cargoRef = doc(db, "cargos", id);
-  await updateDoc(cargoRef, { status });
-};
+const cargosCollection = collection(db, "cargos");
 
 export const subscribeToCargos = (
-  callback: (cargos: Cargo[]) => void,
-  showAll: boolean = false
+  callback: (cargos: Cargo[]) => void
 ) => {
-  const q = showAll
-    ? query(collection(db, "cargos"))
-    : query(collection(db, "cargos"), where("status", "==", "ativo"));
+  const q = query(cargosCollection, orderBy("nome"));
 
-  return onSnapshot(q, (querySnapshot) => {
-    const cargosData: Cargo[] = [];
+  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
+    const data: Cargo[] = [];
     querySnapshot.forEach((doc) => {
-      cargosData.push({ id: doc.id, ...doc.data() } as Cargo);
+      data.push({ id: doc.id, ...doc.data() } as Cargo);
     });
-    callback(cargosData.sort((a, b) => {
-      if (a.status === b.status) return 0;
-      return a.status === 'ativo' ? -1 : 1;
-    }));
+    callback(data);
   });
+};
+
+export const addCargo = async (
+  data: Omit<Cargo, "id" | "status" | "createdAt">
+) => {
+  const parsedData = cargoSchema.pick({ nome: true }).parse(data);
+  const dataComTimestamp = {
+    ...parsedData,
+    status: "ativo" as const,
+    createdAt: serverTimestamp(),
+  };
+  const docRef = await addDoc(cargosCollection, dataComTimestamp);
+  return docRef.id;
+};
+
+export const updateCargo = async (
+  id: string,
+  data: Partial<Omit<Cargo, "id" | "status" | "createdAt">>
+) => {
+  const parsedData = cargoSchema.pick({ nome: true }).partial().parse(data);
+  const docRef = doc(db, "cargos", id);
+  await updateDoc(docRef, parsedData);
+};
+
+export const setCargoStatus = async (
+  id: string,
+  status: "ativo" | "inativo"
+) => {
+  const docRef = doc(db, "cargos", id);
+  await updateDoc(docRef, { status });
 };
