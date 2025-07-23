@@ -58,11 +58,12 @@ export type Cargo = z.infer<typeof cargoSchema>;
 export const funcionarioSchema = z.object({
   id: z.string().optional(),
   razaoSocial: z.string().min(3, "A Razão Social é obrigatória."),
-  cnpj: z.string().length(18, "O CNPJ deve ter 14 dígitos."),
+  cnpj: z.string().length(18, "O CNPJ deve ter 18 caracteres (com máscara)."),
   nomeCompleto: z.string().min(3, "O nome completo é obrigatório."),
-  cpf: z.string().length(14, "O CPF deve ter 11 dígitos."),
+  cpf: z.string().length(14, "O CPF deve ter 14 caracteres (com máscara)."),
   contato: z.string().min(10, "O telefone de contato é obrigatório."),
   cargoId: z.string({ required_error: "O cargo é obrigatório." }).min(1, "O cargo é obrigatório."),
+  cargoNome: z.string().optional(),
   banco: z.string().min(1, "O banco é obrigatório."),
   agencia: z.string().min(1, "A agência é obrigatória."),
   conta: z.string().min(1, "A conta é obrigatória."),
@@ -70,7 +71,7 @@ export const funcionarioSchema = z.object({
   createdAt: z.any().optional(),
   status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
 });
-export type Funcionario = z.infer<typeof funcionarioSchema> & { cargoNome?: string };
+export type Funcionario = z.infer<typeof funcionarioSchema>;
 
 export const unidadeSchema = z.object({
   id: z.string().optional(),

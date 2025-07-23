@@ -1,36 +1,73 @@
 import { db } from "@/lib/firebase";
-import { collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp, query, where } from "firebase/firestore";
-import { Funcionario } from "@/lib/schemas";
+import {
+  collection,
+  addDoc,
+  onSnapshot,
+  doc,
+  updateDoc,
+  serverTimestamp,
+  query,
+  orderBy,
+  QuerySnapshot,
+  DocumentData,
+} from "firebase/firestore";
+import { Funcionario, funcionarioSchema } from "@/lib/schemas";
 
-export const addFuncionario = async (funcionario: Omit<Funcionario, 'id' | 'cargoNome' | 'createdAt' | 'status'>) => {
-  try {
-    const dataWithTimestamp = { ...funcionario, status: 'ativo', createdAt: serverTimestamp() };
-    const docRef = await addDoc(collection(db, "funcionarios"), dataWithTimestamp);
-    return docRef.id;
-  } catch (e) {
-    console.error("Erro ao adicionar funcionário: ", e);
-    throw new Error("Não foi possível adicionar o funcionário.");
-  }
-};
+const funcionariosCollection = collection(db, "funcionarios");
 
-export const subscribeToFuncionarios = (callback: (funcionarios: Funcionario[]) => void) => {
-  const q = query(collection(db, "funcionarios"), where("status", "==", "ativo"));
+export const subscribeToFuncionarios = (
+  callback: (funcionarios: Funcionario[]) => void,
+  showAll: boolean = false
+) => {
+  const q = query(funcionariosCollection, orderBy("nomeCompleto"));
 
-  return onSnapshot(q, (querySnapshot) => {
-    const funcionarios: Funcionario[] = [];
+  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
+    let data: Funcionario[] = [];
     querySnapshot.forEach((doc) => {
-      funcionarios.push({ id: doc.id, ...(doc.data() as Omit<Funcionario, 'id'>) });
+      data.push({ id: doc.id, ...doc.data() } as Funcionario);
     });
-    callback(funcionarios);
+
+    if (showAll) {
+      callback(
+        data.sort((a, b) => {
+          if (a.status === "ativo" && b.status === "inativo") return -1;
+          if (a.status === "inativo" && b.status === "ativo") return 1;
+          return a.nomeCompleto.localeCompare(b.nomeCompleto);
+        })
+      );
+    } else {
+      const ativos = data.filter((item) => item.status === "ativo");
+      callback(ativos);
+    }
   });
 };
 
-export const updateFuncionario = async (id: string, funcionario: Partial<Omit<Funcionario, 'id' | 'createdAt' | 'status'>>) => {
-  const funcionarioDoc = doc(db, "funcionarios", id);
-  await updateDoc(funcionarioDoc, funcionario);
+export const addFuncionario = async (
+  data: Omit<Funcionario, "id" | "createdAt" | "status">
+) => {
+  const parsedData = funcionarioSchema.omit({ id: true, createdAt: true, status: true }).parse(data);
+  const dataComTimestamp = {
+    ...parsedData,
+    status: "ativo" as const,
+    createdAt: serverTimestamp(),
+  };
+  const docRef = await addDoc(funcionariosCollection, dataComTimestamp);
+  return docRef.id;
 };
 
-export const setFuncionarioStatus = async (id: string, status: 'ativo' | 'inativo') => {
-    const funcionarioDoc = doc(db, "funcionarios", id);
-    await updateDoc(funcionarioDoc, { status });
+export const updateFuncionario = async (
+  id: string,
+  data: Partial<Omit<Funcionario, "id" | "createdAt" | "status">>
+) => {
+  const parsedData = funcionarioSchema.omit({ id: true, createdAt: true, status: true }).partial().parse(data);
+  const docRef = doc(db, "funcionarios", id);
+  await updateDoc(docRef, parsedData);
+};
+
+export const setFuncionarioStatus = async (
+  id: string,
+  status: "ativo" | "inativo"
+) => {
+  const docRef = doc(db, "funcionarios", id);
+  await updateDoc(docRef, { status });
 };

@@ -2,6 +2,18 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
 
+
+
+/**
+ * Remove todos os caracteres não numéricos de uma string.
+ * @param value
+ * @returns
+ */
+export const unmask = (value: string | null | undefined): string => {
+  if (!value) return "";
+  return value.replace(/\D/g, "");
+};
+
 export const formatCpfCnpj = (value: string | null | undefined): string => {
   if (!value) return '';
   const cleanedValue = value.replace(/\D/g, '');
