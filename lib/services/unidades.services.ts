@@ -1,38 +1,59 @@
 import { db } from "@/lib/firebase";
-import { collection, addDoc, onSnapshot, doc, updateDoc, QuerySnapshot, DocumentData, serverTimestamp, query, where } from "firebase/firestore";
-import { Unidade } from "@/lib/schemas";
+import {
+  collection,
+  onSnapshot,
+  doc,
+  updateDoc,
+  query,
+  orderBy,
+  QuerySnapshot,
+  DocumentData,
+  addDoc,
+  serverTimestamp,
+  deleteDoc,
+} from "firebase/firestore";
+import { Unidade, unidadeSchema } from "@/lib/schemas";
 
-export const addUnidade = async (unidade: Omit<Unidade, 'id' | 'createdAt' | 'status'>) => {
-  const dataWithTimestamp = { ...unidade, status: 'ativo', createdAt: serverTimestamp() };
-  await addDoc(collection(db, "unidades"), dataWithTimestamp);
-};
-
-export const updateUnidade = async (id: string, unidade: Partial<Omit<Unidade, 'id' | 'createdAt' | 'status'>>) => {
-  const unidadeDoc = doc(db, "unidades", id);
-  await updateDoc(unidadeDoc, unidade);
-};
-
-export const setUnidadeStatus = async (id: string, status: 'ativo' | 'inativo') => {
-    const unidadeDoc = doc(db, "unidades", id);
-    await updateDoc(unidadeDoc, { status });
-};
+const unidadesCollection = collection(db, "unidades");
 
 export const subscribeToUnidades = (
-  callback: (unidades: Unidade[]) => void,
-  showAll: boolean = false
+  callback: (unidades: Unidade[]) => void
 ) => {
-  const q = showAll
-    ? query(collection(db, "unidades"))
-    : query(collection(db, "unidades"), where("status", "==", "ativo"));
+  const q = query(unidadesCollection, orderBy("nome"));
 
   return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    const unidades: Unidade[] = [];
+    const data: Unidade[] = [];
     querySnapshot.forEach((doc) => {
-      unidades.push({ id: doc.id, ...doc.data() as Omit<Unidade, 'id'> });
+      data.push({ id: doc.id, ...doc.data() } as Unidade);
     });
-    callback(unidades.sort((a, b) => {
-        if (a.status === b.status) return 0;
-        return a.status === 'ativo' ? -1 : 1;
-    }));
+    callback(data);
   });
+};
+
+export const addUnidade = async (
+  data: Omit<Unidade, "id" | "status" | "createdAt">
+) => {
+  const parsedData = unidadeSchema.pick({ nome: true, sigla: true }).parse(data);
+  const dataComTimestamp = {
+    ...parsedData,
+    status: "ativo" as const,
+    createdAt: serverTimestamp(),
+  };
+  const docRef = await addDoc(unidadesCollection, dataComTimestamp);
+  return docRef.id;
+};
+
+export const updateUnidade = async (
+  id: string,
+  data: Partial<Omit<Unidade, "id" | "status" | "createdAt">>
+) => {
+  const parsedData = unidadeSchema.pick({ nome: true, sigla: true }).partial().parse(data);
+  const docRef = doc(db, "unidades", id);
+  await updateDoc(docRef, parsedData);
+};
+
+// Unidades são cadastros simples que podem ser deletados se não houver dependências.
+export const deleteUnidade = async (id: string) => {
+  const docRef = doc(db, "unidades", id);
+  await deleteDoc(docRef);
 };

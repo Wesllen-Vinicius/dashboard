@@ -3,79 +3,97 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
 import { z } from "zod";
-
+import { toast } from "sonner";
 import { Unidade, unidadeSchema } from "@/lib/schemas";
 import { addUnidade, updateUnidade } from "@/lib/services/unidades.services";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-
-const formSchema = unidadeSchema.pick({ nome: true, sigla: true });
-type UnidadeFormValues = z.infer<typeof formSchema>;
+import { Input } from "@/components/ui/input";
 
 interface UnidadeFormProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  unidadeToEdit?: Unidade | null;
+  unidadeToEdit: Unidade | null;
 }
 
-export function UnidadeForm({ isOpen, onOpenChange, unidadeToEdit }: UnidadeFormProps) {
+const formSchema = unidadeSchema.pick({ nome: true, sigla: true });
+
+export function UnidadeForm({
+  isOpen,
+  onOpenChange,
+  unidadeToEdit,
+}: UnidadeFormProps) {
   const isEditing = !!unidadeToEdit;
 
-  const form = useForm<UnidadeFormValues>({
+  const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { nome: "", sigla: "" },
+    defaultValues: {
+      nome: "",
+      sigla: "",
+    },
   });
 
   useEffect(() => {
     if (isOpen) {
-        form.reset(isEditing ? { nome: unidadeToEdit.nome, sigla: unidadeToEdit.sigla } : { nome: "", sigla: "" });
+      if (isEditing) {
+        form.reset({ nome: unidadeToEdit.nome, sigla: unidadeToEdit.sigla });
+      } else {
+        form.reset({ nome: "", sigla: "" });
+      }
     }
   }, [isOpen, unidadeToEdit, isEditing, form]);
 
-  const onSubmit = async (values: UnidadeFormValues) => {
+
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      if (isEditing && unidadeToEdit?.id) {
-        await updateUnidade(unidadeToEdit.id, values);
+      if (isEditing) {
+        await updateUnidade(unidadeToEdit.id!, values);
         toast.success("Unidade atualizada com sucesso!");
       } else {
         await addUnidade(values);
-        toast.success("Nova unidade adicionada!");
+        toast.success("Unidade criada com sucesso!");
       }
       onOpenChange(false);
     } catch (error: any) {
-      toast.error("Falha ao salvar a unidade.", { description: error.message });
+      toast.error("Erro ao salvar unidade.", { description: error.message });
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Editar Unidade" : "Adicionar Nova Unidade"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar Unidade" : "Nova Unidade"}</DialogTitle>
           <DialogDescription>
-            Defina o nome e a sigla da unidade de medida.
+            Defina o nome e a sigla para a unidade de medida.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} id="unidade-form" className="space-y-4 py-4">
-            <FormField name="nome" control={form.control} render={({ field }) => (
-                <FormItem><FormLabel>Nome da Unidade *</FormLabel><FormControl><Input placeholder="Ex: Quilograma, Pacote" {...field} /></FormControl><FormMessage /></FormItem>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField control={form.control} name="nome" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nome da Unidade</FormLabel>
+                <FormControl><Input placeholder="Quilograma" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
             )}/>
-            <FormField name="sigla" control={form.control} render={({ field }) => (
-                <FormItem><FormLabel>Sigla *</FormLabel><FormControl><Input placeholder="Ex: kg, pct" {...field} /></FormControl><FormMessage /></FormItem>
+            <FormField control={form.control} name="sigla" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Sigla</FormLabel>
+                <FormControl><Input placeholder="KG" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
             )}/>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? "Salvando..." : "Salvar"}
+              </Button>
+            </DialogFooter>
           </form>
         </Form>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button type="submit" form="unidade-form" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? "Salvando..." : "Salvar"}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
