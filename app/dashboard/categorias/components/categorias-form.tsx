@@ -3,39 +3,22 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
 import { z } from "zod";
-
+import { toast } from "sonner";
 import { Categoria, categoriaSchema } from "@/lib/schemas";
 import { addCategoria, updateCategoria } from "@/lib/services/categorias.services";
-
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
-
-const formSchema = categoriaSchema.pick({ nome: true });
-type CategoriaFormValues = z.infer<typeof formSchema>;
+import { Input } from "@/components/ui/input";
 
 interface CategoriaFormProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  categoriaToEdit?: Categoria | null;
+  categoriaToEdit: Categoria | null;
 }
+
+const formSchema = categoriaSchema.pick({ nome: true });
 
 export function CategoriaForm({
   isOpen,
@@ -44,82 +27,65 @@ export function CategoriaForm({
 }: CategoriaFormProps) {
   const isEditing = !!categoriaToEdit;
 
-  const form = useForm<CategoriaFormValues>({
+  const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { nome: "" },
+    defaultValues: {
+      nome: "",
+    },
   });
 
   useEffect(() => {
     if (isOpen) {
-      form.reset(isEditing ? { nome: categoriaToEdit.nome } : { nome: "" });
+      if (isEditing) {
+        form.reset({ nome: categoriaToEdit.nome });
+      } else {
+        form.reset({ nome: "" });
+      }
     }
   }, [isOpen, categoriaToEdit, isEditing, form]);
 
-  const onSubmit = async (values: CategoriaFormValues) => {
+
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      if (isEditing && categoriaToEdit?.id) {
-        await updateCategoria(categoriaToEdit.id, values);
+      if (isEditing) {
+        await updateCategoria(categoriaToEdit.id!, values);
         toast.success("Categoria atualizada com sucesso!");
       } else {
         await addCategoria(values);
-        toast.success("Nova categoria adicionada!");
+        toast.success("Categoria criada com sucesso!");
       }
       onOpenChange(false);
     } catch (error: any) {
-      toast.error("Falha ao salvar a categoria.", {
-        description: error.message,
-      });
+      toast.error("Erro ao salvar categoria.", { description: error.message });
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>
-            {isEditing ? "Editar Categoria" : "Adicionar Nova Categoria"}
-          </DialogTitle>
+          <DialogTitle>{isEditing ? "Editar Categoria" : "Nova Categoria"}</DialogTitle>
           <DialogDescription>
-            Defina o nome da categoria. Campos com * são obrigatórios.
+            Defina o nome para a categoria.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            id="categoria-form"
-            className="space-y-4 py-4"
-          >
-            <FormField
-              name="nome"
-              control={form.control}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nome da Categoria *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ex: Higiene, Cortes Bovinos" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField control={form.control} name="nome" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nome da Categoria</FormLabel>
+                <FormControl><Input {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}/>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? "Salvando..." : "Salvar"}
+              </Button>
+            </DialogFooter>
           </form>
         </Form>
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            form="categoria-form"
-            disabled={form.formState.isSubmitting}
-          >
-            {form.formState.isSubmitting ? "Salvando..." : "Salvar"}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

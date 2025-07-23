@@ -1,71 +1,60 @@
 import { db } from "@/lib/firebase";
 import {
   collection,
-  addDoc,
   onSnapshot,
   doc,
   updateDoc,
-  serverTimestamp,
   query,
   orderBy,
   QuerySnapshot,
   DocumentData,
+  addDoc,
+  serverTimestamp,
 } from "firebase/firestore";
-import { Categoria } from "@/lib/schemas";
+import { Categoria, categoriaSchema } from "@/lib/schemas";
+
+const categoriasCollection = collection(db, "categorias");
+
+export const subscribeToCategorias = (
+  callback: (categorias: Categoria[]) => void
+) => {
+  const q = query(categoriasCollection, orderBy("nome"));
+
+  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
+    const data: Categoria[] = [];
+    querySnapshot.forEach((doc) => {
+      data.push({ id: doc.id, ...doc.data() } as Categoria);
+    });
+    callback(data);
+  });
+};
 
 export const addCategoria = async (
-  categoria: Omit<Categoria, "id" | "createdAt" | "status">
+  data: Omit<Categoria, "id" | "status" | "createdAt">
 ) => {
-  const dataWithTimestamp = {
-    ...categoria,
-    status: "ativo",
+  const parsedData = categoriaSchema.pick({ nome: true }).parse(data);
+  const dataComTimestamp = {
+    ...parsedData,
+    status: "ativo" as const,
     createdAt: serverTimestamp(),
   };
-  const docRef = await addDoc(collection(db, "categorias"), dataWithTimestamp);
+  const docRef = await addDoc(categoriasCollection, dataComTimestamp);
   return docRef.id;
 };
 
 export const updateCategoria = async (
   id: string,
-  categoria: Partial<Omit<Categoria, "id" | "createdAt" | "status">>
+  data: Partial<Omit<Categoria, "id" | "status" | "createdAt">>
 ) => {
-  const categoriaDoc = doc(db, "categorias", id);
-  await updateDoc(categoriaDoc, categoria);
+  const parsedData = categoriaSchema.pick({ nome: true }).partial().parse(data);
+  const docRef = doc(db, "categorias", id);
+  await updateDoc(docRef, parsedData);
 };
 
 export const setCategoriaStatus = async (
   id: string,
   status: "ativo" | "inativo"
 ) => {
-  const categoriaDoc = doc(db, "categorias", id);
-  await updateDoc(categoriaDoc, { status });
-};
-
-export const subscribeToCategorias = (
-  callback: (categorias: Categoria[]) => void,
-  showAll: boolean = false
-) => {
-  const q = query(collection(db, "categorias"), orderBy("nome"));
-
-  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    let categoriasData: Categoria[] = [];
-    querySnapshot.forEach((doc) => {
-      categoriasData.push({ id: doc.id, ...doc.data() } as Categoria);
-    });
-
-    if (showAll) {
-      // Ordena por status (ativos primeiro), depois por nome
-      callback(
-        categoriasData.sort((a, b) => {
-          if (a.status === "ativo" && b.status === "inativo") return -1;
-          if (a.status === "inativo" && b.status === "ativo") return 1;
-          return a.nome.localeCompare(b.nome);
-        })
-      );
-    } else {
-      // Filtra para mostrar apenas os ativos
-      const ativos = categoriasData.filter((cat) => cat.status === "ativo");
-      callback(ativos);
-    }
-  });
+  const docRef = doc(db, "categorias", id);
+  await updateDoc(docRef, { status });
 };

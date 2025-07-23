@@ -4,50 +4,32 @@ import { useState, useEffect } from "react";
 import { Unsubscribe } from "firebase/firestore";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { ExpandedState, OnChangeFn } from "@tanstack/react-table";
 import { Categoria } from "@/lib/schemas";
 import {
   subscribeToCategorias,
   setCategoriaStatus,
 } from "@/lib/services/categorias.services";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
-import CategoriasActions from "./components/categorias-actions";
-import { CategoriaForm } from "./components/categorias-form";
+import { CategoriasActions } from "./components/categorias-actions";
 import { CategoriasTable } from "./components/categorias-table";
+import { CategoriaForm } from "./components/categorias-form";
 
 export default function CategoriasPage() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showInactive, setShowInactive] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [categoriaToEdit, setCategoriaToEdit] = useState<Categoria | null>(null);
-  const [categoriaIdToDelete, setCategoriaIdToDelete] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [idToToggle, setIdToToggle] = useState<string | null>(null);
 
   useEffect(() => {
     setIsLoading(true);
     const unsubscribe: Unsubscribe = subscribeToCategorias((data) => {
       setCategorias(data);
       setIsLoading(false);
-    }, showInactive);
+    });
     return () => unsubscribe();
-  }, [showInactive]);
-
-  const handleExpansionChange: OnChangeFn<ExpandedState> = (updater) => {
-    const oldExpanded = expanded;
-    const newExpanded =
-      typeof updater === "function" ? updater(oldExpanded) : updater;
-    const oldKeys = Object.keys(oldExpanded);
-    const newKeys = Object.keys(newExpanded);
-    if (newKeys.length > 1) {
-      const addedKey = newKeys.find((key) => !oldKeys.includes(key));
-      if (addedKey) setExpanded({ [addedKey]: true });
-      else setExpanded(newExpanded);
-    } else {
-      setExpanded(newExpanded);
-    }
-  };
+  }, []);
 
   const handleNew = () => {
     setCategoriaToEdit(null);
@@ -59,41 +41,41 @@ export default function CategoriasPage() {
     setIsFormOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setCategoriaIdToDelete(id);
+  const handleToggle = (id: string) => {
+    setIdToToggle(id);
     setIsConfirmOpen(true);
   };
 
-  const confirmDeletion = async () => {
-    if (!categoriaIdToDelete) return;
+  const confirmStatusToggle = async () => {
+    if (!idToToggle) return;
+    const categoria = categorias.find(c => c.id === idToToggle);
+    if (!categoria) return;
+
+    const newStatus = categoria.status === "ativo" ? "inativo" : "ativo";
+    const actionText = newStatus === "inativo" ? "inativada" : "reativada";
+
     try {
-      await setCategoriaStatus(categoriaIdToDelete, "inativo");
-      toast.success("Categoria inativada com sucesso!");
+      await setCategoriaStatus(idToToggle, newStatus);
+      toast.success(`Categoria ${actionText} com sucesso!`);
     } catch (e: any) {
-      toast.error("Erro ao inativar.", { description: e.message });
+      toast.error(`Erro ao ${actionText} a categoria.`, { description: e.message });
     } finally {
-      setCategoriaIdToDelete(null);
+      setIdToToggle(null);
       setIsConfirmOpen(false);
     }
   };
 
-  const handleReactivate = async (id: string) => {
-    try {
-      await setCategoriaStatus(id, "ativo");
-      toast.success("Categoria reativada com sucesso!");
-    } catch (e: any) {
-      toast.error("Erro ao reativar.", { description: e.message });
-    }
-  };
+  const categoriaToToggle = categorias.find(c => c.id === idToToggle);
+  const isTogglingToInactive = categoriaToToggle?.status === 'ativo';
 
   return (
     <>
       <ConfirmationDialog
         open={isConfirmOpen}
         onOpenChange={setIsConfirmOpen}
-        onConfirm={confirmDeletion}
-        title="Confirmar Inativação"
-        description="Esta categoria será inativada, mas poderá ser reativada depois."
+        onConfirm={confirmStatusToggle}
+        title={isTogglingToInactive ? "Confirmar Inativação" : "Confirmar Reativação"}
+        description={`Você tem certeza que deseja ${isTogglingToInactive ? 'inativar' : 'reativar'} esta categoria?`}
       />
       <CategoriaForm
         isOpen={isFormOpen}
@@ -106,19 +88,12 @@ export default function CategoriasPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <CategoriasActions
-          onNew={handleNew}
-          showInactive={showInactive}
-          onShowInactiveChange={setShowInactive}
-        />
+        <CategoriasActions onNew={handleNew} />
         <CategoriasTable
           categorias={categorias}
           isLoading={isLoading}
           onEdit={handleEdit}
-          onDelete={handleDelete}
-          onReactivate={handleReactivate}
-          expanded={expanded}
-          onExpandedChange={handleExpansionChange}
+          onToggle={handleToggle}
         />
       </motion.div>
     </>
