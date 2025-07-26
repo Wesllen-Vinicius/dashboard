@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Unsubscribe } from 'firebase/firestore';
 import {
-  Cliente, Fornecedor, Produto, Funcionario, Cargo, Unidade, Categoria, Compra, Abate, Producao, Venda, Meta, SystemUser, ContaBancaria
+  Cliente, Fornecedor, Produto, Funcionario, Cargo, Unidade, Categoria, Compra, Abate, Producao, Venda, SystemUser, ContaBancaria, Movimentacao
 } from '@/lib/schemas';
 
 import { subscribeToClientes } from '@/lib/services/clientes.services';
@@ -15,9 +15,9 @@ import { subscribeToAbatesByDateRange } from '@/lib/services/abates.services';
 import { subscribeToProducoes } from '@/lib/services/producao.services';
 import { subscribeToVendas } from '@/lib/services/vendas.services';
 import { subscribeToComprasByDateRange } from '@/lib/services/compras.services';
-import { subscribeToMetas } from '@/lib/services/metas.services';
 import { subscribeToUsers } from '@/lib/services/user.services';
 import { subscribeToContasBancarias } from '@/lib/services/contasBancarias.services';
+import { subscribeToMovimentacoes } from '@/lib/services/estoque.services'; // <-- Importação adicionada
 
 interface DataState {
   isDataLoaded: boolean;
@@ -34,9 +34,9 @@ interface DataState {
   abates: Abate[];
   producoes: Producao[];
   vendas: Venda[];
-  metas: Meta[];
   users: SystemUser[];
   contasBancarias: ContaBancaria[];
+  movimentacoes: Movimentacao[]; // <-- Propriedade adicionada
 }
 
 let unsubscribers: Unsubscribe[] = [];
@@ -54,9 +54,9 @@ const initialState = {
     abates: [],
     producoes: [],
     vendas: [],
-    metas: [],
     users: [],
     contasBancarias: [],
+    movimentacoes: [], // <-- Propriedade adicionada
 }
 
 export const useDataStore = create<DataState>((set, get) => ({
@@ -76,9 +76,9 @@ export const useDataStore = create<DataState>((set, get) => ({
         subscribeToProducoes((data) => set({ producoes: data })),
         subscribeToVendas((data) => set({ vendas: data })),
         subscribeToComprasByDateRange(undefined, (data) => set({ compras: data })),
-        subscribeToMetas((data) => set({ metas: data })),
         subscribeToUsers((data) => set({ users: data })),
         subscribeToContasBancarias((data) => set({ contasBancarias: data })),
+        subscribeToMovimentacoes((data) => set({ movimentacoes: data })), // <-- Inscrição adicionada
       ];
 
       unsubscribers = subscriptions;

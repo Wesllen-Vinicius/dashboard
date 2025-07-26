@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { GenericTable } from '@/components/generic-table';
-import { Producao, Funcionario, Abate, Compra } from '@/lib/schemas';
+import { Producao, Funcionario, Abate } from '@/lib/schemas';
 import { IconChevronDown } from '@tabler/icons-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -16,7 +16,6 @@ interface ProducaoTableProps {
   data: Producao[];
   funcionarios: Funcionario[];
   abates: Abate[];
-  compras: Compra[];
   onEdit: (producao: Producao) => void;
   onSetStatus: (id: string, status: 'ativo' | 'inativo') => void;
   expanded: ExpandedState;
@@ -27,15 +26,14 @@ const getResponsavelNome = (id: string, funcionarios: Funcionario[]) => {
     return funcionarios.find(f => f.id === id)?.nomeCompleto || 'N/A';
 };
 
-const getAbateRef = (id: string, abates: Abate[], compras: Compra[]) => {
+const getAbateRef = (id: string, abates: Abate[]) => {
     const abate = abates.find(a => a.id === id);
     if (!abate) return 'N/A';
-    const compra = compras.find(c => c.id === abate.compraId);
-    return `Abate de ${format(new Date(abate.data), "dd/MM/yy")} (NF ${compra?.notaFiscal || '?'})`;
+    return abate.loteId || `Abate de ${format(new Date(abate.data), "dd/MM/yy")}`;
 };
 
 
-export function ProducaoTable({ data, funcionarios, abates, compras, onEdit, onSetStatus, expanded, onExpandedChange }: ProducaoTableProps) {
+export function ProducaoTable({ data, funcionarios, abates, onEdit, onSetStatus, expanded, onExpandedChange }: ProducaoTableProps) {
   const columns: ColumnDef<Producao>[] = [
     {
       id: 'expander',
@@ -74,7 +72,7 @@ export function ProducaoTable({ data, funcionarios, abates, compras, onEdit, onS
     {
       accessorKey: 'abateId',
       header: 'Abate de Origem',
-      cell: ({ row }) => getAbateRef(row.original.abateId, abates, compras),
+      cell: ({ row }) => getAbateRef(row.original.abateId, abates),
     },
     {
       accessorKey: 'status',
@@ -130,7 +128,7 @@ export function ProducaoTable({ data, funcionarios, abates, compras, onEdit, onS
       <ul className="list-disc pl-5 text-sm">
         {row.original.produtos.map((item: any, index: number) => (
           <li key={index}>
-            <strong>{item.produtoNome}:</strong> {item.quantidade} un. (Perda: {item.perda} un.)
+            <strong>{item.produtoNome}:</strong> {item.quantidade} un. (Perda: {item.perda || 0} un.)
           </li>
         ))}
       </ul>

@@ -16,7 +16,6 @@ import FornecedoresActions from "./components/fornecedores-actions";
 import { FornecedoresForm } from "./components/fornecedores-form";
 import { FornecedoresTable } from "./components/fornecedores-table";
 
-
 export default function FornecedoresPage() {
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [isLoading, setIsLoading] = useState(true);

@@ -15,6 +15,7 @@ import { Produto, produtoSchema } from "@/lib/schemas";
 
 const produtosCollection = collection(db, "produtos");
 
+// Função mantida para a página de Produtos
 export const subscribeToProdutos = (
   callback: (produtos: Produto[]) => void
 ) => {
@@ -29,10 +30,34 @@ export const subscribeToProdutos = (
   });
 };
 
+// --- NOVA FUNÇÃO ADICIONADA ---
+// Função para buscar todos os produtos para o painel de Metas e outros locais
+export const subscribeToAllProducts = (
+    callback: (produtos: Produto[]) => void
+) => {
+    const q = query(produtosCollection); // Sem ordenação específica, mais genérico
+
+    return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
+        const data: Produto[] = [];
+        querySnapshot.forEach((doc) => {
+            // Validação para garantir que os dados estão consistentes
+            const parsed = produtoSchema.safeParse({ id: doc.id, ...doc.data() });
+            if (parsed.success) {
+                data.push(parsed.data as Produto);
+            } else {
+                console.warn("Documento de produto com schema inválido:", doc.id, parsed.error.format());
+            }
+        });
+        callback(data);
+    }, (error) => {
+        console.error("Erro ao buscar produtos:", error);
+    });
+};
+
+
 export const addProduto = async (
   data: Omit<Produto, "id" | "status" | "createdAt" | "quantidade">
 ) => {
-  // A validação completa garante que o objeto corresponda a um dos tipos de produto.
   const parsedData = produtoSchema.parse(data);
 
   const dataComTimestamp = {
@@ -49,8 +74,6 @@ export const updateProduto = async (
   id: string,
   data: Partial<Omit<Produto, "id" | "status" | "createdAt" | "quantidade">>
 ) => {
-  // CORREÇÃO: Removemos a validação .partial() que causava o erro.
-  // A função updateDoc do Firestore já lida com atualizações parciais.
   const docRef = doc(db, "produtos", id);
   await updateDoc(docRef, data);
 };

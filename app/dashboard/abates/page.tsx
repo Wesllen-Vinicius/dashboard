@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { useData } from '@/hooks/use-data';
 import { toast } from 'sonner';
-import { Abate, Compra, Funcionario } from '@/lib/schemas';
+import { Abate, Fornecedor } from '@/lib/schemas';
 import { subscribeToAbates, setAbateStatus } from '@/lib/services/abates.services';
 import { ExpandedState } from '@tanstack/react-table';
 import { DependencyAlert } from '@/components/dependency-alert';
 import { AbateForm } from './components/abate-form';
 import { AbatesActions } from './components/abate-actions';
 import { AbateTable } from './components/abate-table';
+import { useDataStore } from '@/store/data.store';
 
 
 export default function AbatesPage() {
@@ -24,25 +24,35 @@ export default function AbatesPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [abateToEdit, setAbateToEdit] = useState<Abate | null>(null);
 
-  const { data: compras, loading: loadingCompras, error: errorCompras } = useData<Compra>('compras', false);
-  const { data: funcionarios, loading: loadingFuncionarios, error: errorFuncionarios } = useData<Funcionario>('funcionarios', false);
+  const { fornecedores } = useDataStore();
 
   useEffect(() => {
-    const unsubscribe = subscribeToAbates(setAbates, showInactive);
+    const unsubscribe = subscribeToAbates((data) => {
+      setAbates(data);
+    }, true); // Sempre busca todos para filtrar localmente
     return () => unsubscribe();
-  }, [showInactive]);
+  }, []);
 
   useEffect(() => {
     const lowercasedFilter = searchTerm.toLowerCase();
-    const filtered = abates.filter(item => {
-        const compra = compras.find(c => c.id === item.compraId);
-        return compra?.notaFiscal.toLowerCase().includes(lowercasedFilter) || searchTerm === '';
+    const filteredBySearch = abates.filter(item => {
+        const fornecedor = fornecedores.find(f => f.id === item.fornecedorId);
+        return (
+          item.loteId?.toLowerCase().includes(lowercasedFilter) ||
+          fornecedor?.nomeRazaoSocial.toLowerCase().includes(lowercasedFilter) ||
+          searchTerm === ''
+        )
     });
-    setFilteredAbates(filtered);
-  }, [searchTerm, abates, compras]);
+
+    const filteredByStatus = showInactive
+      ? filteredBySearch
+      : filteredBySearch.filter(item => item.status !== 'Cancelado');
+
+    setFilteredAbates(filteredByStatus);
+  }, [searchTerm, abates, fornecedores, showInactive]);
 
   const handleAddNew = () => {
-    if (compras.filter(c => c.status === 'ativo').length === 0 || funcionarios.filter(f => f.status === 'ativo').length === 0) {
+    if (fornecedores.filter(f => f.status === 'ativo').length === 0) {
       setIsDependencyAlertOpen(true);
       return;
     }
@@ -56,23 +66,16 @@ export default function AbatesPage() {
   };
 
   const handleDelete = (id: string) => {
-    toast.promise(setAbateStatus(id, 'inativo'), {
-      loading: 'Inativando abate...',
-      success: 'Abate inativado com sucesso!',
-      error: 'Erro ao inativar o abate.',
+    toast.promise(setAbateStatus(id, 'Cancelado'), {
+      loading: 'Cancelando abate...',
+      success: 'Abate cancelado com sucesso!',
+      error: 'Erro ao cancelar o abate.',
     });
   };
 
   const handleReactivate = (id: string) => {
-    toast.promise(setAbateStatus(id, 'ativo'), {
-      loading: 'Reativando abate...',
-      success: 'Abate reativado com sucesso!',
-      error: 'Erro ao reativar o abate.',
-    });
+     toast.error("A reativação de um lote cancelado não é permitida.");
   };
-
-  const isLoading = loadingCompras || loadingFuncionarios;
-  const hasError = errorCompras || errorFuncionarios;
 
   return (
     <>
@@ -80,8 +83,7 @@ export default function AbatesPage() {
         isOpen={isDependencyAlertOpen}
         onOpenChange={setIsDependencyAlertOpen}
         dependencies={[
-            { name: 'Compras Ativas', link: '/dashboard/compras' },
-            { name: 'Funcionários Ativos', link: '/dashboard/funcionarios' }
+            { name: 'Fornecedores Ativos', link: '/dashboard/fornecedores' }
         ]}
       />
       <AbateForm
@@ -104,7 +106,8 @@ export default function AbatesPage() {
 
         <AbateTable
             abates={filteredAbates}
-            isLoading={isLoading}
+            fornecedores={fornecedores}
+            isLoading={false} // Loading principal pode ser controlado aqui se necessário
             onEdit={handleEdit}
             onDelete={handleDelete}
             onReactivate={handleReactivate}

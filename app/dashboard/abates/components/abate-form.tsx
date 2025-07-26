@@ -11,23 +11,27 @@ import { addAbate, updateAbate } from '@/lib/services/abates.services';
 import { Abate, abateSchema } from '@/lib/schemas';
 import { toast } from 'sonner';
 import { Combobox } from '@/components/ui/combobox';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
-import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
-import { useAuthStore } from '@/store/auth.store'; // Corrigido
-import { useDataStore } from '@/store/data.store'; // Corrigido
-import { useEffect } from 'react';
+import { DatePicker } from '@/components/date-picker';
+import { useAuthStore } from '@/store/auth.store';
+import { useDataStore } from '@/store/data.store';
+import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from "framer-motion";
+import { IconArrowLeft, IconArrowRight } from '@tabler/icons-react';
+import { Progress } from '@/components/ui/progress';
 
 const formSchema = abateSchema.pick({
   data: true,
-  total: true,
+  fornecedorId: true,
+  numeroAnimais: true,
+  custoPorAnimal: true,
   condenado: true,
-  responsavelId: true,
-  compraId: true,
 });
 type AbateFormValues = z.infer<typeof formSchema>;
+
+const steps = [
+  { id: 1, name: "Dados do Lote", fields: ["data", "fornecedorId"] },
+  { id: 2, name: "Quantidades e Custos", fields: ["numeroAnimais", "custoPorAnimal", "condenado"] },
+];
 
 interface AbateFormProps {
   isOpen: boolean;
@@ -36,51 +40,65 @@ interface AbateFormProps {
 }
 
 export function AbateForm({ isOpen, onOpenChange, abateToEdit }: AbateFormProps) {
-  const { user } = useAuthStore(); // Corrigido
-  const { compras, users } = useDataStore(); // Corrigido
+  const { user } = useAuthStore();
+  const { fornecedores } = useDataStore();
   const isEditMode = !!abateToEdit;
+  const [currentStep, setCurrentStep] = useState(0);
 
   const form = useForm<AbateFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: isEditMode ? {
-        ...abateToEdit,
-        data: new Date(abateToEdit.data),
-      } : {
-      data: new Date(),
-      total: 0,
-      condenado: 0,
-      responsavelId: '',
-      compraId: '',
+    mode: 'onChange',
+    defaultValues: {
+        data: new Date(),
+        fornecedorId: '',
+        numeroAnimais: 0,
+        custoPorAnimal: 0,
+        condenado: 0,
     },
   });
 
   useEffect(() => {
-    if (isOpen && !isEditMode) {
-      form.reset({
-        data: new Date(),
-        total: 0,
-        condenado: 0,
-        responsavelId: '',
-        compraId: '',
-      });
-    } else if (isOpen && isEditMode) {
-      form.reset({
-        ...abateToEdit,
-        data: new Date(abateToEdit.data)
-      });
+    if (isOpen) {
+      setCurrentStep(0);
+      if (isEditMode && abateToEdit) {
+          form.reset({
+              data: new Date(abateToEdit.data),
+              fornecedorId: abateToEdit.fornecedorId,
+              numeroAnimais: abateToEdit.numeroAnimais,
+              custoPorAnimal: abateToEdit.custoPorAnimal,
+              condenado: abateToEdit.condenado || 0,
+          });
+      } else {
+          form.reset({
+              data: new Date(),
+              fornecedorId: '',
+              numeroAnimais: 0,
+              custoPorAnimal: 0,
+              condenado: 0,
+          });
+      }
     }
   }, [isOpen, isEditMode, abateToEdit, form]);
 
-  const compraOptions = compras
-    .filter(c => c.status === 'ativo')
-    .map(c => ({ label: `NF ${c.notaFiscal}`, value: c.id! }));
+  const nextStep = async () => {
+    const fields = steps[currentStep].fields as (keyof AbateFormValues)[];
+    const output = await form.trigger(fields, { shouldFocus: true });
 
-  const userOptions = users
-    .filter(u => u.status === 'ativo')
-    .map(u => ({ label: u.displayName, value: u.uid! }));
+    if (output && currentStep < steps.length - 1) {
+      setCurrentStep(step => step + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 0) setCurrentStep(step => step - 1);
+  };
+
+  const fornecedorOptions = fornecedores
+    .filter(f => f.status === 'ativo')
+    .map(f => ({ label: f.nomeRazaoSocial, value: f.id! }));
 
   const onSubmit = async (values: AbateFormValues) => {
-    if (!user || !user.role) {
+    if (!user) {
         toast.error("Você precisa estar autenticado para realizar esta ação.");
         return;
     }
@@ -88,140 +106,65 @@ export function AbateForm({ isOpen, onOpenChange, abateToEdit }: AbateFormProps)
     const userPayload = {
         uid: user.uid,
         nome: user.displayName || 'Usuário desconhecido',
-        role: user.role,
-    }
+    };
 
     const promise = isEditMode
-      ? updateAbate(abateToEdit!.id!, values)
-      : addAbate(values, userPayload);
+        ? updateAbate(abateToEdit!.id!, values)
+        : addAbate(values, userPayload);
 
     toast.promise(promise, {
-      loading: `${isEditMode ? 'Atualizando' : 'Criando'} abate...`,
-      success: `Abate ${isEditMode ? 'atualizado' : 'criado'} com sucesso!`,
-      error: `Erro ao ${isEditMode ? 'atualizar' : 'criar'} o abate.`,
+        loading: `${isEditMode ? 'Atualizando' : 'Lançando'} abate...`,
+        success: `Abate ${isEditMode ? 'atualizado' : 'lançado'} com sucesso!`,
+        error: (err) => `Erro: ${err.message}`,
     });
 
     onOpenChange(false);
   };
 
+  const progress = ((currentStep + 1) / steps.length) * 100;
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{isEditMode ? 'Editar Abate' : 'Novo Abate'}</DialogTitle>
-          <DialogDescription>
-            {isEditMode ? 'Atualize os detalhes do abate.' : 'Preencha as informações para um novo abate.'}
-          </DialogDescription>
+          <DialogTitle>{isEditMode ? 'Editar Lançamento' : 'Lançamento de Abate'}</DialogTitle>
+          <DialogDescription>Siga os passos para iniciar o processo de produção.</DialogDescription>
         </DialogHeader>
+        <Progress value={progress} className="w-full h-2 mt-2" />
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="data"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Data do Abate</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant={"outline"}
-                          className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
-                        >
-                          {field.value ? (format(new Date(field.value), "PPP")) : (<span>Selecione uma data</span>)}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="compraId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Compra Vinculada</FormLabel>
-                  <FormControl>
-                    <Combobox
-                      options={compraOptions}
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder="Selecione uma compra (NF)"
-                      searchPlaceholder="Buscar NF..."
-                      emptyMessage="Nenhuma compra encontrada."
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="responsavelId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Responsável pelo Abate</FormLabel>
-                  <FormControl>
-                    <Combobox
-                      options={userOptions}
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder="Selecione um responsável"
-                      searchPlaceholder="Buscar responsável..."
-                      emptyMessage="Nenhum usuário encontrado."
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="total"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Total de Animais</FormLabel>
-                  <FormControl>
-                    <Input type="number" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="condenado"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Animais Condenados</FormLabel>
-                  <FormControl>
-                    <Input type="number" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Salvando...' : (isEditMode ? 'Salvar Alterações' : 'Criar Abate')}
-              </Button>
-            </DialogFooter>
+          <form id="abate-form" onSubmit={form.handleSubmit(onSubmit)} className="py-4 min-h-[280px]">
+            <AnimatePresence mode="wait">
+              <motion.div key={currentStep} initial={{ x: 30, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -30, opacity: 0 }} transition={{ duration: 0.3 }}>
+                {currentStep === 0 && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">{steps[0].name}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField name="data" control={form.control} render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Data do Abate</FormLabel><DatePicker date={field.value} onDateChange={field.onChange} /><FormMessage /></FormItem>)}/>
+                      <FormField name="fornecedorId" control={form.control} render={({ field }) => (<FormItem><FormLabel>Fornecedor (Frigorífico)</FormLabel><Combobox options={fornecedorOptions} value={field.value} onChange={field.onChange} placeholder="Selecione o fornecedor" searchPlaceholder="Buscar fornecedor..." emptyMessage="Nenhum fornecedor encontrado."/><FormMessage /></FormItem>)}/>
+                    </div>
+                  </div>
+                )}
+                {currentStep === 1 && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">{steps[1].name}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField name="numeroAnimais" control={form.control} render={({ field }) => (<FormItem><FormLabel>Nº de Animais Abatidos</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)}/>
+                      <FormField name="custoPorAnimal" control={form.control} render={({ field }) => (<FormItem><FormLabel>Custo por Animal (R$)</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>)}/>
+                      <FormField name="condenado" control={form.control} render={({ field }) => (<FormItem><FormLabel>Animais Condenados</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)}/>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
           </form>
         </Form>
+        <DialogFooter className="mt-6 pt-4 border-t">
+          <div className="flex justify-between w-full">
+            <Button type="button" variant="outline" onClick={prevStep} disabled={currentStep === 0}><IconArrowLeft className="h-4 w-4 mr-2"/>Voltar</Button>
+            {currentStep < steps.length - 1 && (<Button type="button" onClick={nextStep}>Avançar<IconArrowRight className="h-4 w-4 ml-2"/></Button>)}
+            {currentStep === steps.length - 1 && (<Button type="submit" form="abate-form" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? 'Salvando...' : (isEditMode ? 'Salvar Alterações' : 'Lançar Abate')}</Button>)}
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

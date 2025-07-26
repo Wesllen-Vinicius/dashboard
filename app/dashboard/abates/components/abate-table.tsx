@@ -7,7 +7,7 @@ import { Timestamp } from "firebase/firestore";
 import { motion } from "framer-motion";
 import { IconPencil, IconTrash, IconRotateClockwise, IconChevronDown } from "@tabler/icons-react";
 
-import { Abate, Funcionario, Compra } from "@/lib/schemas";
+import { Abate, Fornecedor } from "@/lib/schemas";
 import { useAuthStore } from "@/store/auth.store";
 import { useDataStore } from "@/store/data.store";
 
@@ -18,16 +18,16 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { DetailsSubRow } from "@/components/details-sub-row";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-
+import { formatCurrency } from "@/lib/utils/formatters";
 
 type AbateComDetalhes = Abate & {
-  responsavelNome?: string;
+  fornecedorNome?: string;
   registradorNome?: string;
-  compraRef?: string;
 };
 
 interface AbateTableProps {
   abates: Abate[];
+  fornecedores: Fornecedor[];
   isLoading: boolean;
   onEdit: (abate: Abate) => void;
   onDelete: (id: string) => void;
@@ -38,6 +38,7 @@ interface AbateTableProps {
 
 export function AbateTable({
   abates,
+  fornecedores,
   isLoading,
   onEdit,
   onDelete,
@@ -46,7 +47,7 @@ export function AbateTable({
   onExpandedChange,
 }: AbateTableProps) {
   const { user } = useAuthStore();
-  const { funcionarios, users, compras } = useDataStore();
+  const { users } = useDataStore();
   const currentUserProfile = useMemo(
     () => users.find((u) => u.uid === user?.uid),
     [users, user]
@@ -56,17 +57,18 @@ export function AbateTable({
   const abatesEnriquecidos: AbateComDetalhes[] = useMemo(() => {
     return abates.map(abate => ({
       ...abate,
-      responsavelNome: funcionarios.find(f => f.id === abate.responsavelId)?.nomeCompleto || 'N/A',
+      fornecedorNome: fornecedores.find(f => f.id === abate.fornecedorId)?.nomeRazaoSocial || 'N/A',
       registradorNome: abate.registradoPor.nome || 'N/A',
-      compraRef: compras.find(c => c.id === abate.compraId)?.notaFiscal || 'N/A',
     }));
-  }, [abates, funcionarios, compras]);
+  }, [abates, fornecedores]);
 
   const renderSubComponent = useCallback(({ row }: { row: Row<AbateComDetalhes> }) => {
     const abate = row.original;
     const details = [
         { label: "ID do Registro", value: abate.id },
-        { label: "Responsável pelo Abate", value: abate.responsavelNome },
+        { label: "Fornecedor", value: abate.fornecedorNome },
+        { label: "Custo por Animal", value: formatCurrency(abate.custoPorAnimal) },
+        { label: "Custo Total do Lote", value: formatCurrency(abate.custoTotal) },
         { label: "Registrado Por", value: abate.registradorNome },
         {
             label: "Data do Registro",
@@ -77,6 +79,16 @@ export function AbateTable({
     ];
     return <DetailsSubRow details={details} />;
   }, []);
+
+  const getStatusInfo = (status: string | undefined): { text: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" } => {
+      switch (status) {
+          case 'Finalizado': return { text: 'Finalizado', variant: 'success' };
+          case 'Em Processamento': return { text: 'Em Processamento', variant: 'warning' };
+          case 'Aguardando Processamento': return { text: 'Aguardando', variant: 'default' };
+          case 'Cancelado': return { text: 'Cancelado', variant: 'destructive' };
+          default: return { text: status || 'Desconhecido', variant: 'outline' };
+      }
+  };
 
   const columns: ColumnDef<AbateComDetalhes>[] = useMemo(() => [
     {
@@ -99,20 +111,17 @@ export function AbateTable({
       },
     },
     { accessorKey: "data", header: "Data", cell: ({ row }) => format(new Date(row.original.data), "dd/MM/yyyy") },
-    { accessorKey: "compraRef", header: "Ref. Compra (NF)" },
-    { accessorKey: "total", header: "Total Abatido" },
+    { accessorKey: "loteId", header: "Lote" },
+    { accessorKey: "fornecedorNome", header: "Fornecedor" },
+    { accessorKey: "numeroAnimais", header: "Nº Animais" },
     { accessorKey: "condenado", header: "Condenado" },
-    {
-        header: "Rendimento",
-        cell: ({ row }) => {
-          const rendimento = row.original.total > 0 ? ((row.original.total - row.original.condenado) / row.original.total) * 100 : 0;
-          return <Badge variant={rendimento < 95 ? "destructive" : "success"}>{rendimento.toFixed(1)}%</Badge>;
-        }
-    },
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => (<Badge variant={row.original.status === 'ativo' ? 'success' : 'destructive'}>{row.original.status === 'ativo' ? 'Ativo' : 'Inativo'}</Badge>)
+      cell: ({ row }) => {
+        const statusInfo = getStatusInfo(row.original.status);
+        return <Badge variant={statusInfo.variant}>{statusInfo.text}</Badge>;
+      }
     },
     {
       id: "actions",
@@ -122,14 +131,7 @@ export function AbateTable({
         return (
           <div className="flex justify-end gap-2">
             <TooltipProvider>
-              {item.status === 'ativo' ? (
-                <>
-                  <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={() => onEdit(item)} disabled={!podeEditar}><IconPencil className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Editar</p></TooltipContent></Tooltip>
-                  <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="text-destructive" onClick={() => onDelete(item.id!)} disabled={!podeEditar}><IconTrash className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Inativar</p></TooltipContent></Tooltip>
-                </>
-              ) : (
-                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={() => onReactivate(item.id!)} disabled={!podeEditar}><IconRotateClockwise className="h-4 w-4 text-green-500" /></Button></TooltipTrigger><TooltipContent><p>Reativar</p></TooltipContent></Tooltip>
-              )}
+                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={() => onEdit(item)} disabled={!podeEditar}><IconPencil className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Editar</p></TooltipContent></Tooltip>
             </TooltipProvider>
           </div>
         );
@@ -146,8 +148,8 @@ export function AbateTable({
       <GenericTable
         columns={columns}
         data={abatesEnriquecidos}
-        filterPlaceholder="Pesquisar por NF..."
-        filterColumnId="compraRef"
+        filterPlaceholder="Pesquisar por Lote ou Fornecedor..."
+        filterColumnId="loteId"
         renderSubComponent={renderSubComponent}
         expanded={expanded}
         onExpandedChange={onExpandedChange}

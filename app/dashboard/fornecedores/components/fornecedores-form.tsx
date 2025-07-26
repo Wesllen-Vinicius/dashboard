@@ -15,7 +15,6 @@ import {
 } from "@/lib/services/fornecedores.services";
 import { fetchCnpjData, fetchCepData } from "@/lib/services/brasilapi.services";
 import { fetchBancos, Banco } from "@/lib/services/bancos.service";
-import { formatCep } from "@/lib/utils/formatters";
 
 import {
   Dialog,
@@ -60,7 +59,7 @@ const defaultFormValues: FormValues = {
   inscricaoEstadual: "",
   email: "",
   telefone: "",
-  endereco: { cep: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", uf: "" },
+  endereco: { cep: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", uf: "", pais: "Brasil", codigoPais: "1058" },
   banco: { nome: "", agencia: "", conta: "", pix: "" },
 };
 
@@ -124,10 +123,29 @@ export function FornecedoresForm({
     if (isOpen) {
       setCurrentStep(0);
       if (isEditing && fornecedorToEdit) {
-        const valuesToSet = {
-          ...defaultFormValues, ...fornecedorToEdit,
-          endereco: { ...defaultFormValues.endereco, ...fornecedorToEdit.endereco, cep: formatCep(fornecedorToEdit.endereco?.cep) },
-          banco: { ...defaultFormValues.banco, ...fornecedorToEdit.banco },
+        const valuesToSet: FormValues = {
+            tipoPessoa: fornecedorToEdit.tipoPessoa || 'juridica',
+            cpfCnpj: fornecedorToEdit.cpfCnpj || '',
+            nomeRazaoSocial: fornecedorToEdit.nomeRazaoSocial || '',
+            nomeFantasia: fornecedorToEdit.nomeFantasia || '',
+            inscricaoEstadual: fornecedorToEdit.inscricaoEstadual || '',
+            email: fornecedorToEdit.email || '',
+            telefone: fornecedorToEdit.telefone || '',
+            endereco: {
+                cep: fornecedorToEdit.endereco?.cep || '',
+                logradouro: fornecedorToEdit.endereco?.logradouro || '',
+                numero: fornecedorToEdit.endereco?.numero || '',
+                complemento: fornecedorToEdit.endereco?.complemento || '',
+                bairro: fornecedorToEdit.endereco?.bairro || '',
+                cidade: fornecedorToEdit.endereco?.cidade || '',
+                uf: fornecedorToEdit.endereco?.uf || '',
+            },
+            banco: {
+                nome: fornecedorToEdit.banco?.nome || '',
+                agencia: fornecedorToEdit.banco?.agencia || '',
+                conta: fornecedorToEdit.banco?.conta || '',
+                pix: fornecedorToEdit.banco?.pix || '',
+            },
         };
         form.reset(valuesToSet);
       } else {
@@ -155,7 +173,7 @@ export function FornecedoresForm({
     setIsCnpjLoading(true);
     try {
       const data = await fetchCnpjData(cnpj);
-      form.setValue("endereco.cep", formatCep(data.cep), { shouldValidate: true });
+      form.setValue("endereco.cep", data.cep || '', { shouldValidate: true });
       form.setValue("nomeRazaoSocial", data.razao_social || "", { shouldValidate: true });
       form.setValue("nomeFantasia", data.nome_fantasia || "", { shouldValidate: true });
       form.setValue("endereco.logradouro", data.logradouro || "", { shouldValidate: true });
@@ -240,16 +258,16 @@ export function FornecedoresForm({
                     <h3 className="text-lg font-semibold text-foreground">{steps[0].name}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <FormField name="tipoPessoa" control={form.control} render={({ field }) => ( <FormItem><FormLabel><TruncatedCell>Tipo *</TruncatedCell></FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="juridica">Pessoa Jurídica</SelectItem><SelectItem value="fisica">Pessoa Física</SelectItem></SelectContent></Select></FormItem> )}/>
-                      <Controller name="cpfCnpj" control={form.control} render={({ field, fieldState }) => ( <FormItem className="md:col-span-2"><FormLabel><TruncatedCell>{tipoPessoa === 'juridica' ? "CNPJ *" : "CPF *"}</TruncatedCell></FormLabel><div className="flex gap-2"><InputMask {...field} mask={tipoPessoa === 'juridica' ? "__.___.___/____-__" : "___.___.___-__"} replacement={{ _: /\d/ }} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"/>{tipoPessoa === 'juridica' && ( <Button type="button" onClick={handleCnpjSearch} disabled={isCnpjLoading}>{isCnpjLoading ? <IconLoader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}</Button> ) }</div>{fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}</FormItem> )}/>
+                      <Controller name="cpfCnpj" control={form.control} render={({ field, fieldState }) => ( <FormItem className="md:col-span-2"><FormLabel><TruncatedCell>{tipoPessoa === 'juridica' ? "CNPJ *" : "CPF *"}</TruncatedCell></FormLabel><div className="flex gap-2"><InputMask {...field} value={field.value ?? ''} mask={tipoPessoa === 'juridica' ? "__.___.___/____-__" : "___.___.___-__"} replacement={{ _: /\d/ }} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"/>{tipoPessoa === 'juridica' && ( <Button type="button" onClick={handleCnpjSearch} disabled={isCnpjLoading}>{isCnpjLoading ? <IconLoader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}</Button> ) }</div>{fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}</FormItem> )}/>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField name="nomeRazaoSocial" control={form.control} render={({ field }) => (<FormItem><FormLabel><TruncatedCell>{tipoPessoa === 'juridica' ? 'Razão Social *' : 'Nome Completo *'}</TruncatedCell></FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                        {tipoPessoa === 'juridica' && <FormField name="nomeFantasia" control={form.control} render={({ field }) => (<FormItem><FormLabel><TruncatedCell>Nome Fantasia</TruncatedCell></FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />}
+                        {tipoPessoa === 'juridica' && <FormField name="nomeFantasia" control={form.control} render={({ field }) => (<FormItem><FormLabel><TruncatedCell>Nome Fantasia</TruncatedCell></FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <FormField name="inscricaoEstadual" control={form.control} render={({ field }) => ( <FormItem><FormLabel><TruncatedCell>Inscrição Estadual</TruncatedCell></FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem> )}/>
-                        <FormField name="email" control={form.control} render={({ field }) => ( <FormItem><FormLabel><TruncatedCell>E-mail</TruncatedCell></FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem> )}/>
-                        <Controller name="telefone" control={form.control} render={({ field }) => ( <FormItem><FormLabel><TruncatedCell>Telefone</TruncatedCell></FormLabel><FormControl><InputMask mask="(__) ____-____" replacement={{ _: /\d/ }} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...field} /></FormControl><FormMessage /></FormItem> )}/>
+                        <FormField name="inscricaoEstadual" control={form.control} render={({ field }) => ( <FormItem><FormLabel><TruncatedCell>Inscrição Estadual</TruncatedCell></FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem> )}/>
+                        <FormField name="email" control={form.control} render={({ field }) => ( <FormItem><FormLabel><TruncatedCell>E-mail</TruncatedCell></FormLabel><FormControl><Input type="email" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem> )}/>
+                        <Controller name="telefone" control={form.control} render={({ field }) => ( <FormItem><FormLabel><TruncatedCell>Telefone</TruncatedCell></FormLabel><FormControl><InputMask mask="(__) ____-____" replacement={{ _: /\d/ }} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem> )}/>
                     </div>
                   </div>
                 )}
@@ -258,17 +276,17 @@ export function FornecedoresForm({
                     <div className="space-y-4">
                         <h3 className="text-lg font-semibold text-foreground">{steps[1].name}</h3>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                            <Controller name="endereco.cep" control={form.control} render={({ field }) => ( <FormItem><FormLabel><TruncatedCell>CEP</TruncatedCell></FormLabel><div className="flex gap-2"><InputMask mask="_____-___" replacement={{ _: /\d/ }} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...field} onBlur={() => handleCepSearch()}/>{isCepLoading && <IconLoader2 className="h-5 w-5 animate-spin" />}</div></FormItem> )}/>
-                            <FormField name="endereco.logradouro" control={form.control} render={({ field }) => (<FormItem className="md:col-span-3"><FormLabel><TruncatedCell>Logradouro</TruncatedCell></FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+                            <Controller name="endereco.cep" control={form.control} render={({ field }) => ( <FormItem><FormLabel><TruncatedCell>CEP</TruncatedCell></FormLabel><div className="flex gap-2"><InputMask mask="_____-___" replacement={{ _: /\d/ }} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...field} value={field.value ?? ''} onBlur={() => handleCepSearch()}/>{isCepLoading && <IconLoader2 className="h-5 w-5 animate-spin" />}</div></FormItem> )}/>
+                            <FormField name="endereco.logradouro" control={form.control} render={({ field }) => (<FormItem className="md:col-span-3"><FormLabel><TruncatedCell>Logradouro</TruncatedCell></FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl></FormItem>)} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <FormField name="endereco.numero" control={form.control} render={({ field }) => (<FormItem><FormLabel><TruncatedCell>Número</TruncatedCell></FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-                            <FormField name="endereco.complemento" control={form.control} render={({ field }) => (<FormItem className="md:col-span-3"><FormLabel><TruncatedCell>Complemento</TruncatedCell></FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+                            <FormField name="endereco.numero" control={form.control} render={({ field }) => (<FormItem><FormLabel><TruncatedCell>Número</TruncatedCell></FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl></FormItem>)} />
+                            <FormField name="endereco.complemento" control={form.control} render={({ field }) => (<FormItem className="md:col-span-3"><FormLabel><TruncatedCell>Complemento</TruncatedCell></FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl></FormItem>)} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <FormField name="endereco.bairro" control={form.control} render={({ field }) => (<FormItem><FormLabel><TruncatedCell>Bairro</TruncatedCell></FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-                            <FormField name="endereco.cidade" control={form.control} render={({ field }) => (<FormItem><FormLabel><TruncatedCell>Cidade</TruncatedCell></FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-                            <FormField name="endereco.uf" control={form.control} render={({ field }) => (<FormItem><FormLabel><TruncatedCell>UF</TruncatedCell></FormLabel><FormControl><Input maxLength={2} {...field} /></FormControl></FormItem>)} />
+                            <FormField name="endereco.bairro" control={form.control} render={({ field }) => (<FormItem><FormLabel><TruncatedCell>Bairro</TruncatedCell></FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl></FormItem>)} />
+                            <FormField name="endereco.cidade" control={form.control} render={({ field }) => (<FormItem><FormLabel><TruncatedCell>Cidade</TruncatedCell></FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl></FormItem>)} />
+                            <FormField name="endereco.uf" control={form.control} render={({ field }) => (<FormItem><FormLabel><TruncatedCell>UF</TruncatedCell></FormLabel><FormControl><Input maxLength={2} {...field} value={field.value ?? ''} /></FormControl></FormItem>)} />
                         </div>
                     </div>
                 )}

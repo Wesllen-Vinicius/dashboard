@@ -7,7 +7,7 @@ import { z } from "zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useDataStore } from "@/store/data.store";
-import { Produto, produtoSchema } from "@/lib/schemas";
+import { Produto, produtoSchema, ProdutoVenda, ProdutoMateriaPrima, ProdutoUsoInterno } from "@/lib/schemas";
 import { addProduto, updateProduto } from "@/lib/services/produtos.services";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -23,11 +23,11 @@ interface FormProps {
   produtoToEdit?: Produto | null;
 }
 
-// Schema flexível para o formulário
 const formSchema = z.object({
     tipoProduto: z.enum(["VENDA", "USO_INTERNO", "MATERIA_PRIMA"]),
     nome: z.string().min(3, "O nome/descrição é obrigatório."),
     custoUnitario: z.coerce.number().min(0, "O custo não pode ser negativo."),
+    metaPorAnimal: z.coerce.number().min(0, "A meta não pode ser negativa.").optional(),
     unidadeId: z.string().optional(),
     precoVenda: z.coerce.number().optional(),
     sku: z.string().optional(),
@@ -59,13 +59,13 @@ export function ProdutoForm({
     if (isOpen) {
       setCurrentStep(0);
       if (isEditing && produtoToEdit) {
-        // CORREÇÃO: Garante que todos os campos tenham um valor padrão definido
         form.reset({
           tipoProduto: produtoToEdit.tipoProduto,
           nome: produtoToEdit.nome || "",
           custoUnitario: produtoToEdit.custoUnitario || 0,
+          metaPorAnimal: 'metaPorAnimal' in produtoToEdit ? produtoToEdit.metaPorAnimal || 0 : 0,
           unidadeId: 'unidadeId' in produtoToEdit ? produtoToEdit.unidadeId : "",
-          precoVenda: 'precoVenda' in produtoToEdit ? produtoToEdit.precoVenda : 0,
+          precoVenda: 'precoVenda' in produtoToEdit ? produtoToEdit.precoVenda || 0 : 0,
           sku: 'sku' in produtoToEdit ? produtoToEdit.sku : "",
           ncm: 'ncm' in produtoToEdit ? produtoToEdit.ncm : "",
           cfop: 'cfop' in produtoToEdit ? produtoToEdit.cfop : "",
@@ -73,11 +73,11 @@ export function ProdutoForm({
           categoriaId: 'categoriaId' in produtoToEdit ? produtoToEdit.categoriaId : "",
         });
       } else {
-        // CORREÇÃO: Define valores iniciais para todos os campos para evitar 'undefined'
         form.reset({
           tipoProduto: "VENDA",
           nome: "",
           custoUnitario: 0,
+          metaPorAnimal: 0,
           unidadeId: "",
           precoVenda: 0,
           sku: "",
@@ -92,7 +92,7 @@ export function ProdutoForm({
 
   const steps = [
     { id: 1, name: "Tipo de Produto", fields: ["tipoProduto"]},
-    { id: 2, name: "Detalhes do Produto", fields: ["nome", "custoUnitario", "unidadeId", "precoVenda", "categoriaId"]},
+    { id: 2, name: "Detalhes do Produto", fields: ["nome", "custoUnitario", "unidadeId", "precoVenda", "categoriaId", "metaPorAnimal"]},
     { id: 3, name: "Informações Fiscais", fields: ["ncm", "cfop"]}
   ];
 
@@ -121,13 +121,14 @@ export function ProdutoForm({
             tipoProduto: 'VENDA',
             nome: values.nome,
             custoUnitario: values.custoUnitario,
+            metaPorAnimal: values.metaPorAnimal,
             unidadeId: values.unidadeId!,
             precoVenda: values.precoVenda!,
             ncm: values.ncm!,
             cfop: values.cfop!,
             sku: values.sku || "",
             cest: values.cest || "",
-          };
+          } as Omit<ProdutoVenda, "id" | "status" | "createdAt" | "quantidade">;
           break;
         case 'USO_INTERNO':
           dataToSubmit = {
@@ -135,15 +136,16 @@ export function ProdutoForm({
             nome: values.nome,
             custoUnitario: values.custoUnitario,
             categoriaId: values.categoriaId!,
-          };
+          } as Omit<ProdutoUsoInterno, "id" | "status" | "createdAt" | "quantidade">;
           break;
         case 'MATERIA_PRIMA':
           dataToSubmit = {
             tipoProduto: 'MATERIA_PRIMA',
             nome: values.nome,
             custoUnitario: values.custoUnitario,
+            metaPorAnimal: values.metaPorAnimal,
             unidadeId: values.unidadeId!,
-          };
+          } as Omit<ProdutoMateriaPrima, "id" | "status" | "createdAt" | "quantidade">;
           break;
         default:
           throw new Error("Tipo de produto inválido");
@@ -196,6 +198,9 @@ export function ProdutoForm({
                       <FormField name="custoUnitario" control={form.control} render={({ field }) => (<FormItem><FormLabel>Custo Unitário</FormLabel><FormControl><Input type="number" step="0.01" {...field}/></FormControl><FormMessage/></FormItem>)}/>
                       { tipoProduto === 'VENDA' && <FormField name="precoVenda" control={form.control} render={({ field }) => (<FormItem><FormLabel>Preço de Venda</FormLabel><FormControl><Input type="number" step="0.01" {...field}/></FormControl><FormMessage/></FormItem>)}/> }
                     </div>
+                     { (tipoProduto === 'VENDA' || tipoProduto === 'MATERIA_PRIMA') && (
+                        <FormField name="metaPorAnimal" control={form.control} render={({ field }) => (<FormItem><FormLabel>Meta por Animal (Opcional)</FormLabel><FormControl><Input type="number" step="0.01" {...field} value={field.value ?? 0} /></FormControl><FormMessage/></FormItem>)}/>
+                     )}
                   </div>
                 )}
                  {currentStep === 2 && tipoProduto === 'VENDA' && (
@@ -204,7 +209,7 @@ export function ProdutoForm({
                       <FormField name="ncm" control={form.control} render={({ field }) => (<FormItem><FormLabel>NCM</FormLabel><FormControl><Input {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
                       <FormField name="cfop" control={form.control} render={({ field }) => (<FormItem><FormLabel>CFOP</FormLabel><FormControl><Input {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
                     </div>
-                     <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-4">
                       <FormField name="sku" control={form.control} render={({ field }) => (<FormItem><FormLabel>SKU (Opcional)</FormLabel><FormControl><Input {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
                       <FormField name="cest" control={form.control} render={({ field }) => (<FormItem><FormLabel>CEST (Opcional)</FormLabel><FormControl><Input {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
                     </div>

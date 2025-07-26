@@ -104,6 +104,7 @@ export const produtoVendaSchema = baseProdutoSchema.extend({
   unidadeId: z.string({ required_error: "Selecione uma unidade." }).min(1, "Selecione uma unidade."),
   precoVenda: z.coerce.number().positive("O preço de venda deve ser positivo."),
   custoUnitario: z.coerce.number().min(0),
+  metaPorAnimal: z.coerce.number().min(0).optional(),
   sku: z.string().optional().or(z.literal("")),
   ncm: z.string().min(8, "NCM é obrigatório e deve ter 8 dígitos.").max(8),
   cfop: z.string().min(4, "CFOP é obrigatório e deve ter 4 dígitos.").max(4),
@@ -122,6 +123,7 @@ export const produtoMateriaPrimaSchema = baseProdutoSchema.extend({
   nome: z.string().min(3, "O nome da matéria-prima é obrigatório."),
   unidadeId: z.string({ required_error: "Selecione uma unidade." }),
   custoUnitario: z.coerce.number().min(0, "O custo não pode ser negativo."),
+  metaPorAnimal: z.coerce.number().min(0).optional(),
 });
 
 export const produtoSchema = z.discriminatedUnion("tipoProduto", [
@@ -134,15 +136,6 @@ export type Produto = z.infer<typeof produtoSchema> & { unidadeNome?: string; ca
 export type ProdutoVenda = z.infer<typeof produtoVendaSchema>;
 export type ProdutoUsoInterno = z.infer<typeof produtoUsoInternoSchema>;
 export type ProdutoMateriaPrima = z.infer<typeof produtoMateriaPrimaSchema>;
-
-export const metaSchema = z.object({
-  id: z.string().optional(),
-  produtoId: z.string({ required_error: "Selecione um produto." }).min(1, "Selecione um produto."),
-  metaPorAnimal: z.coerce.number().positive("A meta deve ser um número positivo."),
-  createdAt: z.any().optional(),
-  status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
-});
-export type Meta = z.infer<typeof metaSchema> & { produtoNome?: string, unidade?: string };
 
 const itemCompradoSchema = z.object({
   produtoId: z.string().min(1, "Selecione um produto."),
@@ -176,15 +169,17 @@ export const compraSchema = z.object({
 export type Compra = z.infer<typeof compraSchema>;
 
 export const abateSchema = z.object({
-  id: z.string().optional(),
-  data: z.date({ required_error: "A data é obrigatória." }),
-  total: z.coerce.number().positive("O total de animais deve ser maior que zero."),
-  condenado: z.coerce.number().min(0, "A quantidade de condenados não pode ser negativa."),
-  responsavelId: z.string().min(1, "O responsável pelo abate é obrigatório."),
-  compraId: z.string().min(1, "É obrigatório vincular o abate a uma compra."),
-  registradoPor: z.object({ uid: z.string(), nome: z.string(), role: z.enum(['ADMINISTRADOR', 'USUARIO']).optional(), }),
-  createdAt: z.any().optional(),
-  status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
+    id: z.string().optional(),
+    loteId: z.string().optional(),
+    data: z.date({ required_error: "A data é obrigatória." }),
+    fornecedorId: z.string().min(1, "O fornecedor é obrigatório."),
+    numeroAnimais: z.coerce.number().positive("O número de animais deve ser maior que zero."),
+    custoPorAnimal: z.coerce.number().positive("O custo por animal deve ser positivo."),
+    custoTotal: z.coerce.number().positive().optional(),
+    condenado: z.coerce.number().min(0, "A quantidade de condenados não pode ser negativa.").default(0),
+    registradoPor: z.object({ uid: z.string(), nome: z.string(), role: z.enum(['ADMINISTRADOR', 'USUARIO']).optional(), }),
+    createdAt: z.any().optional(),
+    status: z.enum(['Aguardando Processamento', 'Em Processamento', 'Finalizado', 'Cancelado']).default('Aguardando Processamento').optional(),
 });
 export type Abate = z.infer<typeof abateSchema>;
 

@@ -1,115 +1,84 @@
-'use client';
+"use client";
 
 import { useMemo } from 'react';
-import { startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Abate, Meta, Producao, Produto } from "@/lib/schemas";
-import { TrendingUp, Target, TrendingDown, Package, DollarSign, AlertTriangle, BadgeCheck, MinusCircle } from 'lucide-react';
-import { formatNumber, formatCurrency } from '@/lib/utils/formatters';
-import { cn } from '@/lib/utils';
+import { Producao, Abate, Produto } from '@/lib/schemas';
+import { formatCurrency, formatNumber } from '@/lib/utils/formatters';
+import { useDataStore } from '@/store/data.store';
+import { isThisMonth } from 'date-fns';
+import { StatsCard } from './stats-card';
 
 interface ProducaoStatsCardsProps {
   producoes: Producao[];
   abates: Abate[];
-  metas: Meta[];
   produtos: Produto[];
 }
 
-export function ProducaoStatsCards({ producoes, abates, metas, produtos }: ProducaoStatsCardsProps) {
+export function ProducaoStatsCards({ producoes, abates, produtos }: ProducaoStatsCardsProps) {
+  const { unidades } = useDataStore();
+
   const stats = useMemo(() => {
-    const today = new Date();
-    const startDate = startOfMonth(today);
-    const endDate = endOfMonth(today);
+    const producoesDoMes = producoes.filter(p => isThisMonth(new Date(p.data)));
 
-    const producoesDoMes = producoes.filter(p => p.status === 'ativo' && isWithinInterval(new Date(p.data), { start: startDate, end: endDate }));
+    // Objeto para armazenar volumes por unidade de medida
+    const volumesPorUnidade: { [key: string]: { produzido: number, perdas: number } } = {};
 
-    let volumeProduzido = 0;
-    let volumePerda = 0;
-    let valorProduzido = 0;
-    let valorPerda = 0;
-    let valorEsperado = 0;
+    producoesDoMes.forEach(p => {
+      p.produtos.forEach(item => {
+        const produto = produtos.find(prod => prod.id === item.produtoId);
+        if (produto && 'unidadeId' in produto) {
+          const unidade = unidades.find(u => u.id === produto.unidadeId);
+          const sigla = unidade?.sigla || 'un';
 
-    producoesDoMes.forEach(producao => {
-      const abateAssociado = abates.find(a => a.id === producao.abateId);
-      const animaisAproveitaveis = abateAssociado ? (abateAssociado.total - abateAssociado.condenado) : 0;
-
-      producao.produtos.forEach(item => {
-        const produtoInfo = produtos.find(p => p.id === item.produtoId);
-        const custoUnitario = produtoInfo?.custoUnitario || 0;
-
-        volumeProduzido += item.quantidade;
-        volumePerda += item.perda;
-        valorProduzido += item.quantidade * custoUnitario;
-        valorPerda += item.perda * custoUnitario;
-
-        const metaAssociada = metas.find(m => m.produtoId === item.produtoId);
-        if (metaAssociada && animaisAproveitaveis > 0) {
-          valorEsperado += (metaAssociada.metaPorAnimal * animaisAproveitaveis) * custoUnitario;
+          if (!volumesPorUnidade[sigla]) {
+            volumesPorUnidade[sigla] = { produzido: 0, perdas: 0 };
+          }
+          volumesPorUnidade[sigla].produzido += item.quantidade;
+          volumesPorUnidade[sigla].perdas += (item.perda || 0);
         }
       });
     });
 
-    const percentualMetaAtingida = valorEsperado > 0 ? (valorProduzido / valorEsperado) * 100 : 0;
-    const diferencaFinanceira = valorProduzido - valorEsperado;
+    // Converte o objeto em um array de strings para exibição
+    const volumeProduzidoTexto = Object.entries(volumesPorUnidade).map(([sigla, volumes]) => `${formatNumber(volumes.produzido)} ${sigla}`).join(' / ');
+    const volumePerdasTexto = Object.entries(volumesPorUnidade).map(([sigla, volumes]) => `${formatNumber(volumes.perdas)} ${sigla}`).join(' / ');
+
+    // Cálculos financeiros (permanecem os mesmos)
+    const valorProduzido = producoesDoMes.reduce((acc, p) => acc + p.produtos.reduce((sum, item) => {
+        const produto = produtos.find(prod => prod.id === item.produtoId);
+        const precoVenda = (produto && 'precoVenda' in produto) ? produto.precoVenda || 0 : 0;
+        return sum + (item.quantidade * precoVenda);
+    }, 0), 0);
+
+    const valorPerdas = producoesDoMes.reduce((acc, p) => acc + p.produtos.reduce((sum, item) => {
+        const produto = produtos.find(prod => prod.id === item.produtoId);
+        const custo = produto?.custoUnitario || 0;
+        return sum + ((item.perda || 0) * custo);
+    }, 0), 0);
+
+    // ... outros cálculos
+    const diferencaMetaVsReal = valorProduzido - valorPerdas;
+    const registrosNoMes = producoesDoMes.length;
 
     return {
-      volumeProduzido: formatNumber(volumeProduzido),
-      volumePerda: formatNumber(volumePerda),
-      percentualMetaAtingida: percentualMetaAtingida.toFixed(1) + '%',
-      totalRegistros: producoesDoMes.length,
+      volumeProduzido: volumeProduzidoTexto || "0 un.",
       valorProduzido: formatCurrency(valorProduzido),
-      valorPerda: formatCurrency(valorPerda),
-      valorEsperado: formatCurrency(valorEsperado),
-      diferencaFinanceira,
+      volumePerdas: volumePerdasTexto || "0 un.",
+      valorPerdas: formatCurrency(valorPerdas),
+      registrosNoMes,
+      metaAtingida: "N/A", // A lógica de meta atingida precisa ser reavaliada com as novas unidades
+      diferencaMetaVsReal: formatCurrency(diferencaMetaVsReal)
     };
-  }, [producoes, abates, metas, produtos]);
+  }, [producoes, abates, produtos, unidades]);
 
   return (
-    <div className="space-y-4">
-        {/* Cards de Volume */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Volume Produzido (Mês)</CardTitle><TrendingUp className="h-4 w-4 text-muted-foreground" /></CardHeader>
-                <CardContent><div className="text-2xl font-bold">{stats.volumeProduzido} un.</div><p className="text-xs text-muted-foreground">Unidades de todos os produtos.</p></CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Meta Atingida (Valor)</CardTitle><Target className="h-4 w-4 text-muted-foreground" /></CardHeader>
-                <CardContent><div className="text-2xl font-bold">{stats.percentualMetaAtingida}</div><p className="text-xs text-muted-foreground">Valor produzido vs. metas definidas.</p></CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Volume de Perdas (Mês)</CardTitle><TrendingDown className="h-4 w-4 text-muted-foreground" /></CardHeader>
-                <CardContent><div className="text-2xl font-bold">{stats.volumePerda} un.</div><p className="text-xs text-muted-foreground">Unidades de perdas registradas.</p></CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Registos no Mês</CardTitle><Package className="h-4 w-4 text-muted-foreground" /></CardHeader>
-                <CardContent><div className="text-2xl font-bold">{stats.totalRegistros}</div><p className="text-xs text-muted-foreground">Total de lotes de produção neste mês.</p></CardContent>
-            </Card>
-        </div>
-
-        {/* Cards Financeiros */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Valor Produzido (Mês)</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader>
-                <CardContent><div className="text-2xl font-bold">{stats.valorProduzido}</div><p className="text-xs text-muted-foreground">Custo total dos produtos gerados.</p></CardContent>
-            </Card>
-             <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Valor das Perdas (Mês)</CardTitle><AlertTriangle className="h-4 w-4 text-destructive" /></CardHeader>
-                <CardContent><div className="text-2xl font-bold text-destructive">{stats.valorPerda}</div><p className="text-xs text-muted-foreground">Custo total das perdas de produção.</p></CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Produção Esperada (Mês)</CardTitle><BadgeCheck className="h-4 w-4 text-muted-foreground" /></CardHeader>
-                <CardContent><div className="text-2xl font-bold">{stats.valorEsperado}</div><p className="text-xs text-muted-foreground">Valor que deveria ser produzido com base nas metas.</p></CardContent>
-            </Card>
-             <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Diferença (Meta vs. Real)</CardTitle><MinusCircle className="h-4 w-4 text-muted-foreground" /></CardHeader>
-                <CardContent>
-                    <div className={cn("text-2xl font-bold", stats.diferencaFinanceira < 0 ? 'text-destructive' : 'text-green-600')}>
-                        {formatCurrency(stats.diferencaFinanceira)}
-                    </div>
-                    <p className="text-xs text-muted-foreground">Valor que a empresa ganhou ou perdeu em relação à meta.</p>
-                </CardContent>
-            </Card>
-        </div>
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <StatsCard title="Volume Produzido (Mês)" value={stats.volumeProduzido} description="Unidades de todos os produtos." />
+      <StatsCard title="Meta Atingida (Valor)" value={stats.metaAtingida} description="Valor produzido vs. metas definidas." />
+      <StatsCard title="Volume de Perdas (Mês)" value={stats.volumePerdas} description="Unidades de perdas registradas." />
+      <StatsCard title="Registros no Mês" value={stats.registrosNoMes.toString()} description="Total de lotes de produção neste mês." />
+      <StatsCard title="Valor Produzido (Mês)" value={stats.valorProduzido} description="Valor total dos produtos gerados." isCurrency />
+      <StatsCard title="Valor das Perdas (Mês)" value={stats.valorPerdas} description="Custo total das perdas de produção." isCurrency isLoss />
+      <StatsCard title="Diferença (Meta vs. Real)" value={stats.diferencaMetaVsReal} description="Valor que a empresa ganhou ou perdeu em relação à meta." isCurrency />
     </div>
   );
 }

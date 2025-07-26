@@ -11,9 +11,9 @@ import { subscribeToProdutos, setProdutoStatus } from "@/lib/services/produtos.s
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { DependencyAlert } from "@/components/dependency-alert";
 import { ProdutosActions } from "./components/produtos-actions";
-
 import { ProdutosTable } from "./components/produtos-table";
 import { ProdutoForm } from "./components/produtos-form";
+import { ProdutosStatsCards } from "./components/produtos-stats-cards";
 
 export default function ProdutosPage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
@@ -74,7 +74,6 @@ export default function ProdutosPage() {
     }
   };
 
-  // CORREÇÃO: Lógica de expansão simplificada para o padrão da biblioteca, corrigindo o bug.
   const handleExpansionChange: OnChangeFn<ExpandedState> = (updater) => {
     setExpanded(updater);
   };
@@ -111,6 +110,10 @@ export default function ProdutosPage() {
         transition={{ duration: 0.5 }}
       >
         <ProdutosActions onNew={handleNew} />
+
+        {/* Card de Stats Adicionado Aqui */}
+        <ProdutosStatsCards produtos={produtos} />
+
         <ProdutosTable
           produtos={produtos}
           isLoading={isLoading || loadingUnidades || loadingCategorias}

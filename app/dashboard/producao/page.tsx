@@ -25,7 +25,7 @@ export default function ProducaoPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [producaoToEdit, setProducaoToEdit] = useState<Producao | null>(null);
 
-  const { funcionarios, abates, compras, metas, produtos } = useDataStore();
+  const { funcionarios, abates, produtos } = useDataStore();
 
   useEffect(() => {
     const unsubscribe = subscribeToProducoes(setProducoes, showInactive);
@@ -34,21 +34,20 @@ export default function ProducaoPage() {
 
   useEffect(() => {
     const lowercasedFilter = searchTerm.toLowerCase();
-    const filtered = producoes.filter(item => {
-        const abate = abates.find(a => a.id === item.abateId);
-        const compra = abate ? compras.find(c => c.id === abate.compraId) : null;
-        return item.lote?.toLowerCase().includes(lowercasedFilter) ||
-               compra?.notaFiscal.toLowerCase().includes(lowercasedFilter) ||
-               searchTerm === '';
-    });
+    const filtered = producoes.filter(item =>
+        item.lote?.toLowerCase().includes(lowercasedFilter) || searchTerm === ''
+    );
     setFilteredProducoes(filtered);
-  }, [searchTerm, producoes, abates, compras]);
+  }, [searchTerm, producoes]);
 
   const handleAddNew = () => {
     const dependenciesFaltantes = [];
-    if (abates.filter(a => a.status === 'ativo').length === 0) {
+
+    const abatesDisponiveis = abates.filter(a => a.status === 'Aguardando Processamento' || a.status === 'Em Processamento');
+    if (abatesDisponiveis.length === 0) {
       dependenciesFaltantes.push({ name: 'Abates Ativos', link: '/dashboard/abates' });
     }
+
     if (funcionarios.filter(f => f.status === 'ativo').length === 0) {
       dependenciesFaltantes.push({ name: 'Funcionários Ativos', link: '/dashboard/funcionarios' });
     }
@@ -105,13 +104,12 @@ export default function ProducaoPage() {
           onShowInactiveChange={setShowInactive}
         />
 
-        <ProducaoStatsCards producoes={producoes} abates={abates} metas={metas} produtos={produtos} />
+        <ProducaoStatsCards producoes={producoes} abates={abates} produtos={produtos} />
 
         <ProducaoTable
           data={filteredProducoes}
           funcionarios={funcionarios}
           abates={abates}
-          compras={compras}
           onEdit={handleEdit}
           onSetStatus={handleSetStatus}
           expanded={expanded}
