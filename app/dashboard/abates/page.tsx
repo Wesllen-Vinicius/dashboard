@@ -107,7 +107,7 @@ export default function AbatesPage() {
         <AbateTable
             abates={filteredAbates}
             fornecedores={fornecedores}
-            isLoading={false} // Loading principal pode ser controlado aqui se necessário
+            isLoading={false}
             onEdit={handleEdit}
             onDelete={handleDelete}
             onReactivate={handleReactivate}

@@ -109,6 +109,9 @@ export const produtoVendaSchema = baseProdutoSchema.extend({
   ncm: z.string().min(8, "NCM é obrigatório e deve ter 8 dígitos.").max(8),
   cfop: z.string().min(4, "CFOP é obrigatório e deve ter 4 dígitos.").max(4),
   cest: z.string().optional().or(z.literal("")),
+  // Campos de Lote e Validade adicionados
+  controlaLote: z.boolean().default(false).optional(),
+  diasValidade: z.coerce.number().min(0).optional(),
 });
 
 export const produtoUsoInternoSchema = baseProdutoSchema.extend({

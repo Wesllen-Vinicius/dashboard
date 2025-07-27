@@ -1,16 +1,15 @@
 "use client";
 
 import { useMemo } from 'react';
-import { formatCurrency } from '@/lib/utils/formatters';
 import { useDataStore } from '@/store/data.store';
 import { isThisMonth, isThisYear } from 'date-fns';
+import { formatCurrency } from '@/lib/utils/formatters';
 import { StatsCard } from './stats-card';
 
 export function VendasStatsCards() {
   const { vendas } = useDataStore();
 
   const stats = useMemo(() => {
-    const agora = new Date();
     const vendasDoMes = vendas.filter(v => isThisMonth(new Date(v.data)));
     const vendasDoAno = vendas.filter(v => isThisYear(new Date(v.data)));
 

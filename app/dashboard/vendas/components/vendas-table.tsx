@@ -42,7 +42,7 @@ const NfeActionButton = ({ venda, onPrepareNFe }: { venda: VendaComDetalhes, onP
 
 const renderSubComponent = ({ row }: { row: Row<VendaComDetalhes> }) => {
     return (
-        <div className="p-4 bg-muted/20">
+        <div className="p-4 bg-muted/50">
             <h4 className="font-semibold text-sm mb-2">Itens da Venda</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                 {row.original.produtos.map((p, i) => (
@@ -71,7 +71,7 @@ export function VendasTable({ vendas, onEdit, onPrepareNFe, isReadOnly }: Vendas
         { header: "Valor Final", cell: ({ row }) => `R$ ${(row.original.valorFinal || row.original.valorTotal).toFixed(2)}` },
         { header: "Pagamento", cell: ({ row }) => <Badge variant={row.original.status === 'Paga' ? 'success' : 'warning'}>{row.original.status}</Badge> },
         { id: "nfe_status_action", header: "NF-e", cell: ({ row }) => <NfeActionButton venda={row.original} onPrepareNFe={onPrepareNFe} /> },
-        { id: "edit_action", cell: ({ row }) => ( <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={() => onEdit(row.original)} disabled={isReadOnly}><IconPencil className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Editar Venda</p></TooltipContent></Tooltip></TooltipProvider> )}
+        { id: "edit_action", cell: ({ row }) => ( <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={() => onEdit(row.original)} disabled={isReadOnly || row.original.nfe?.status === 'autorizado'}><IconPencil className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Editar Venda</p></TooltipContent></Tooltip></TooltipProvider> )}
     ];
 
     return (

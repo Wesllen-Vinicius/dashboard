@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Unsubscribe } from "firebase/firestore";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
