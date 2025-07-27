@@ -64,7 +64,8 @@ export const lancarAbate = functions.https.onCall(async (request: functions.http
       status: "Aguardando Processamento",
     });
 
-    const contaPagarRef = db.collection("contas_a_pagar").doc();
+    // Correção: nome da coleção atualizado para seguir o padrão camelCase
+    const contaPagarRef = db.collection("contasAPagar").doc();
     batch.set(contaPagarRef, {
       abateId: abateRef.id,
       fornecedorId: fornecedorId,
