@@ -3,37 +3,65 @@
 import { ColumnDef, ExpandedState, OnChangeFn } from '@tanstack/react-table';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { GenericTable } from '@/components/generic-table';
-import { Producao, Funcionario, Abate } from '@/lib/schemas';
+import {
+  Producao,
+  Funcionario,
+  Abate,
+  Produto,
+  Unidade,
+} from '@/lib/schemas';
 import { IconChevronDown } from '@tabler/icons-react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 interface ProducaoTableProps {
   data: Producao[];
   funcionarios: Funcionario[];
   abates: Abate[];
+  produtos: Produto[];
+  unidades: Unidade[];
   onEdit: (producao: Producao) => void;
   onSetStatus: (id: string, status: 'ativo' | 'inativo') => void;
   expanded: ExpandedState;
   onExpandedChange: OnChangeFn<ExpandedState>;
 }
 
-const getResponsavelNome = (id: string, funcionarios: Funcionario[]) => {
-    return funcionarios.find(f => f.id === id)?.nomeCompleto || 'N/A';
-};
+const getResponsavelNome = (id: string, funcionarios: Funcionario[]) =>
+  funcionarios.find((f) => f.id === id)?.nomeCompleto || 'N/A';
 
 const getAbateRef = (id: string, abates: Abate[]) => {
-    const abate = abates.find(a => a.id === id);
-    if (!abate) return 'N/A';
-    return abate.loteId || `Abate de ${format(new Date(abate.data), "dd/MM/yy")}`;
+  const abate = abates.find((a) => a.id === id);
+  if (!abate) return 'N/A';
+  return abate.loteId || `Abate de ${format(new Date(abate.data), 'dd/MM/yy')}`;
 };
 
-
-export function ProducaoTable({ data, funcionarios, abates, onEdit, onSetStatus, expanded, onExpandedChange }: ProducaoTableProps) {
+export function ProducaoTable({
+  data,
+  funcionarios,
+  abates,
+  produtos,
+  unidades,
+  onEdit,
+  onSetStatus,
+  expanded,
+  onExpandedChange,
+}: ProducaoTableProps) {
   const columns: ColumnDef<Producao>[] = [
     {
       id: 'expander',
@@ -41,16 +69,29 @@ export function ProducaoTable({ data, funcionarios, abates, onEdit, onSetStatus,
       cell: ({ row }) => {
         const isExpanded = row.getIsExpanded();
         return (
-            <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" onClick={row.getToggleExpandedHandler()}>
-                            <IconChevronDown className={cn("h-5 w-5 transition-transform duration-200", isExpanded && "rotate-180")} />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right"><p>{isExpanded ? "Ocultar Produtos" : "Ver Produtos"}</p></TooltipContent>
-                </Tooltip>
-            </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={row.getToggleExpandedHandler()}
+                >
+                  <IconChevronDown
+                    className={cn(
+                      'h-5 w-5 transition-transform duration-200',
+                      isExpanded && 'rotate-180'
+                    )}
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>
+                  {isExpanded ? 'Ocultar Produtos' : 'Ver Produtos'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       },
     },
@@ -62,23 +103,31 @@ export function ProducaoTable({ data, funcionarios, abates, onEdit, onSetStatus,
     {
       accessorKey: 'lote',
       header: 'Lote',
-      cell: ({row}) => row.original.lote || '-'
+      cell: ({ row }) => row.original.lote || '-',
     },
     {
       accessorKey: 'responsavelId',
       header: 'Responsável',
-      cell: ({ row }) => getResponsavelNome(row.original.responsavelId, funcionarios),
+      cell: ({ row }) =>
+        getResponsavelNome(row.original.responsavelId, funcionarios),
     },
     {
       accessorKey: 'abateId',
       header: 'Abate de Origem',
-      cell: ({ row }) => getAbateRef(row.original.abateId, abates),
+      cell: ({ row }) =>
+        getAbateRef(row.original.abateId, abates),
     },
     {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => (
-        <Badge variant={row.original.status === 'ativo' ? 'success' : 'destructive'}>
+        <Badge
+          variant={
+            row.original.status === 'ativo'
+              ? 'success'
+              : 'destructive'
+          }
+        >
           {row.original.status === 'ativo' ? 'Ativo' : 'Inativo'}
         </Badge>
       ),
@@ -104,13 +153,23 @@ export function ProducaoTable({ data, funcionarios, abates, onEdit, onSetStatus,
                     <Pencil className="mr-2 h-4 w-4" />
                     Editar
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onSetStatus(producao.id!, 'inativo')} className="text-red-600">
+                  <DropdownMenuItem
+                    onClick={() =>
+                      onSetStatus(producao.id!, 'inativo')
+                    }
+                    className="text-red-600"
+                  >
                     <Trash2 className="mr-2 h-4 w-4" />
                     Inativar
                   </DropdownMenuItem>
                 </>
               ) : (
-                <DropdownMenuItem onClick={() => onSetStatus(producao.id!, 'ativo')} className="text-green-600">
+                <DropdownMenuItem
+                  onClick={() =>
+                    onSetStatus(producao.id!, 'ativo')
+                  }
+                  className="text-green-600"
+                >
                   <RotateCcw className="mr-2 h-4 w-4" />
                   Reativar
                 </DropdownMenuItem>
@@ -126,13 +185,37 @@ export function ProducaoTable({ data, funcionarios, abates, onEdit, onSetStatus,
     <div className="bg-gray-100 dark:bg-gray-800 p-4">
       <h4 className="font-semibold mb-2 text-sm">Itens Produzidos:</h4>
       <ul className="list-disc pl-5 text-sm">
-        {row.original.produtos.map((item: any, index: number) => (
-          <li key={index}>
-            <strong>{item.produtoNome}:</strong> {item.quantidade} un. (Perda: {item.perda || 0} un.)
-          </li>
-        ))}
+        {row.original.produtos.map((item: any, idx: number) => {
+          // Buscamos o produto cadastrado
+          const produto = produtos.find((p) => p.id === item.produtoId);
+
+          // Fallback para unidades
+          let unidadeSigla = 'UN';
+
+          // Só acessamos unidadeId em produtos que não sejam USO_INTERNO
+          if (
+            produto &&
+            produto.tipoProduto !== 'USO_INTERNO'
+          ) {
+            unidadeSigla =
+              unidades.find(
+                (u) => u.id === produto.unidadeId
+              )?.sigla.toUpperCase() ?? 'UN';
+          }
+
+          return (
+            <li key={idx}>
+              <strong>{item.produtoNome}:</strong>{' '}
+              {item.quantidade} {unidadeSigla}{' '}
+              (Perda: {item.perda ?? 0} {unidadeSigla})
+            </li>
+          );
+        })}
       </ul>
-       <p className='text-xs text-muted-foreground mt-2'><strong>Registrado por:</strong> {row.original.registradoPor.nome}</p>
+      <p className="text-xs text-muted-foreground mt-2">
+        <strong>Registrado por:</strong>{' '}
+        {row.original.registradoPor.nome}
+      </p>
     </div>
   );
 

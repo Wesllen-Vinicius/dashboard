@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
 import { useMemo } from 'react';
-import { Producao, Abate, Produto } from '@/lib/schemas';
+import { isThisMonth } from 'date-fns';
+import { Producao, Abate, Produto, ProdutoVenda, Unidade } from '@/lib/schemas';
 import { formatCurrency, formatNumber } from '@/lib/utils/formatters';
 import { useDataStore } from '@/store/data.store';
-import { isThisMonth } from 'date-fns';
 import { StatsCard } from './stats-card';
 
 interface ProducaoStatsCardsProps {
@@ -13,72 +13,138 @@ interface ProducaoStatsCardsProps {
   produtos: Produto[];
 }
 
-export function ProducaoStatsCards({ producoes, abates, produtos }: ProducaoStatsCardsProps) {
+function isProdutoVenda(p: Produto): p is ProdutoVenda {
+  return p.tipoProduto === 'VENDA';
+}
+
+export function ProducaoStatsCards({
+  producoes,
+  abates,
+  produtos,
+}: ProducaoStatsCardsProps) {
   const { unidades } = useDataStore();
 
   const stats = useMemo(() => {
+    // 1. Filtrar produções deste mês
     const producoesDoMes = producoes.filter(p => isThisMonth(new Date(p.data)));
 
-    // Objeto para armazenar volumes por unidade de medida
-    const volumesPorUnidade: { [key: string]: { produzido: number, perdas: number } } = {};
+    // 2. Acumular volumes e perdas por unidade
+    const volumesPorUnidade: Record<string, { produzido: number; perdas: number }> = {};
+
+    // 3. Valores financeiros
+    let valorRealTotal = 0;  // receita bruta
+    let valorMetaTotal = 0;  // meta em valor (para %)
+    let valorPerdas = 0;     // receita perdida
+
+    // 4. Quantidade de registros
+    const registrosNoMes = producoesDoMes.length;
 
     producoesDoMes.forEach(p => {
-      p.produtos.forEach(item => {
-        const produto = produtos.find(prod => prod.id === item.produtoId);
-        if (produto && 'unidadeId' in produto) {
-          const unidade = unidades.find(u => u.id === produto.unidadeId);
-          const sigla = unidade?.sigla || 'un';
+      // Encontrar o abate para calcular animais válidos
+      const ab = abates.find(abate => abate.id === p.abateId);
+      const animaisValidos = ab ? ab.numeroAnimais - (ab.condenado || 0) : 0;
 
-          if (!volumesPorUnidade[sigla]) {
-            volumesPorUnidade[sigla] = { produzido: 0, perdas: 0 };
+      p.produtos.forEach(item => {
+        const prod = produtos.find(x => x.id === item.produtoId);
+        if (!prod) return;
+
+        // Unidades
+        const unidade = unidades.find(u =>
+          ('unidadeId' in prod && u.id === prod.unidadeId)
+        );
+        const sigla = unidade?.sigla.toUpperCase() || 'UN';
+
+        volumesPorUnidade[sigla] ??= { produzido: 0, perdas: 0 };
+        volumesPorUnidade[sigla].produzido += item.quantidade;
+        volumesPorUnidade[sigla].perdas += item.perda || 0;
+
+        if (isProdutoVenda(prod)) {
+          const pv = prod.precoVenda || 0;
+          // Receita bruta
+          valorRealTotal += item.quantidade * pv;
+          // Receita-meta
+          if (typeof prod.metaPorAnimal === 'number') {
+            const metaVol = animaisValidos * prod.metaPorAnimal;
+            valorMetaTotal += metaVol * pv;
           }
-          volumesPorUnidade[sigla].produzido += item.quantidade;
-          volumesPorUnidade[sigla].perdas += (item.perda || 0);
+          // Receita perdida (perda × preço de venda)
+          valorPerdas += (item.perda || 0) * pv;
+        } else {
+          // Para outros tipos, tratar perda como custo
+          valorPerdas += (item.perda || 0) * prod.custoUnitario;
         }
       });
     });
 
-    // Converte o objeto em um array de strings para exibição
-    const volumeProduzidoTexto = Object.entries(volumesPorUnidade).map(([sigla, volumes]) => `${formatNumber(volumes.produzido)} ${sigla}`).join(' / ');
-    const volumePerdasTexto = Object.entries(volumesPorUnidade).map(([sigla, volumes]) => `${formatNumber(volumes.perdas)} ${sigla}`).join(' / ');
+    // 5. Formatar volumes
+    const volumeProduzido = Object.entries(volumesPorUnidade)
+      .map(([s, v]) => `${formatNumber(v.produzido)} ${s}`)
+      .join(' / ') || '0 UN';
 
-    // Cálculos financeiros (permanecem os mesmos)
-    const valorProduzido = producoesDoMes.reduce((acc, p) => acc + p.produtos.reduce((sum, item) => {
-        const produto = produtos.find(prod => prod.id === item.produtoId);
-        const precoVenda = (produto && 'precoVenda' in produto) ? produto.precoVenda || 0 : 0;
-        return sum + (item.quantidade * precoVenda);
-    }, 0), 0);
+    const volumePerdas = Object.entries(volumesPorUnidade)
+      .map(([s, v]) => `${formatNumber(v.perdas)} ${s}`)
+      .join(' / ') || '0 UN';
 
-    const valorPerdas = producoesDoMes.reduce((acc, p) => acc + p.produtos.reduce((sum, item) => {
-        const produto = produtos.find(prod => prod.id === item.produtoId);
-        const custo = produto?.custoUnitario || 0;
-        return sum + ((item.perda || 0) * custo);
-    }, 0), 0);
+    // 6. Meta atingida (%)
+    const metaAtingida = valorMetaTotal > 0
+      ? `${((valorRealTotal / valorMetaTotal) * 100).toFixed(2)}%`
+      : '–';
 
-    // ... outros cálculos
-    const diferencaMetaVsReal = valorProduzido - valorPerdas;
-    const registrosNoMes = producoesDoMes.length;
+    // 7. Lucro líquido
+    const lucroLiquido = valorRealTotal - valorPerdas;
 
     return {
-      volumeProduzido: volumeProduzidoTexto || "0 un.",
-      valorProduzido: formatCurrency(valorProduzido),
-      volumePerdas: volumePerdasTexto || "0 un.",
+      volumeProduzido,
+      volumePerdas,
+      valorProduzido: formatCurrency(valorRealTotal),
       valorPerdas: formatCurrency(valorPerdas),
-      registrosNoMes,
-      metaAtingida: "N/A", // A lógica de meta atingida precisa ser reavaliada com as novas unidades
-      diferencaMetaVsReal: formatCurrency(diferencaMetaVsReal)
+      registrosNoMes: registrosNoMes.toString(),
+      metaAtingida,
+      diferencaLiquida: formatCurrency(lucroLiquido),
     };
   }, [producoes, abates, produtos, unidades]);
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <StatsCard title="Volume Produzido (Mês)" value={stats.volumeProduzido} description="Unidades de todos os produtos." />
-      <StatsCard title="Meta Atingida (Valor)" value={stats.metaAtingida} description="Valor produzido vs. metas definidas." />
-      <StatsCard title="Volume de Perdas (Mês)" value={stats.volumePerdas} description="Unidades de perdas registradas." />
-      <StatsCard title="Registros no Mês" value={stats.registrosNoMes.toString()} description="Total de lotes de produção neste mês." />
-      <StatsCard title="Valor Produzido (Mês)" value={stats.valorProduzido} description="Valor total dos produtos gerados." isCurrency />
-      <StatsCard title="Valor das Perdas (Mês)" value={stats.valorPerdas} description="Custo total das perdas de produção." isCurrency isLoss />
-      <StatsCard title="Diferença (Meta vs. Real)" value={stats.diferencaMetaVsReal} description="Valor que a empresa ganhou ou perdeu em relação à meta." isCurrency />
+      <StatsCard
+        title="Volume Produzido (Mês)"
+        value={stats.volumeProduzido}
+        description="Quantidade produzida por unidade"
+      />
+      <StatsCard
+        title="Meta Atingida (%)"
+        value={stats.metaAtingida}
+        description="Receita realizada vs meta"
+      />
+      <StatsCard
+        title="Volume de Perdas (Mês)"
+        value={stats.volumePerdas}
+        description="Quantidades perdidas"
+      />
+      <StatsCard
+        title="Registros no Mês"
+        value={stats.registrosNoMes}
+        description="Número de produções"
+      />
+      <StatsCard
+        title="Receita Bruta"
+        value={stats.valorProduzido}
+        description="Total estimado em vendas"
+        isCurrency
+      />
+      <StatsCard
+        title="Receita Perdida"
+        value={stats.valorPerdas}
+        description="Valor não realizado"
+        isCurrency
+        isLoss
+      />
+      <StatsCard
+        title="Lucro Líquido"
+        value={stats.diferencaLiquida}
+        description="Receita – perdas"
+        isCurrency
+      />
     </div>
   );
 }

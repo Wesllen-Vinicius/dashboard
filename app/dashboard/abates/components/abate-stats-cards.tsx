@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { motion } from "framer-motion";
-import { IconScale, IconTransform, IconMeat, IconPercentage } from "@tabler/icons-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Abate } from "@/lib/schemas";
-import { useMemo } from "react";
+import { motion } from 'framer-motion';
+import { IconScale, IconTransform, IconMeat, IconPercentage } from '@tabler/icons-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Abate } from '@/lib/schemas';
+import { useMemo } from 'react';
 
 interface AbateStatsCardsProps {
   abates: Abate[];
@@ -18,15 +18,16 @@ const cardVariants = {
     transition: {
       delay: i * 0.1,
       duration: 0.5,
-      ease: "easeOut",
+      ease: 'easeOut',
     },
   }),
 };
 
 export function AbateStatsCards({ abates }: AbateStatsCardsProps) {
   const stats = useMemo(() => {
-    const totalAnimais = abates.reduce((acc, abate) => acc + abate.total, 0);
-    const totalCondenados = abates.reduce((acc, abate) => acc + abate.condenado, 0);
+    // usa numeroAnimais em vez de "total", que não existe
+    const totalAnimais = abates.reduce((acc, abate) => acc + abate.numeroAnimais, 0);
+    const totalCondenados = abates.reduce((acc, abate) => acc + (abate.condenado || 0), 0);
     const animaisValidos = totalAnimais - totalCondenados;
     const taxaCondenacao = totalAnimais > 0 ? (totalCondenados / totalAnimais) * 100 : 0;
 
@@ -34,18 +35,40 @@ export function AbateStatsCards({ abates }: AbateStatsCardsProps) {
   }, [abates]);
 
   const cards = [
-    { title: "Animais Abatidos", value: stats.totalAnimais.toLocaleString('pt-BR'), icon: IconScale },
-    { title: "Animais Válidos", value: stats.animaisValidos.toLocaleString('pt-BR'), icon: IconMeat },
-    { title: "Animais Condenados", value: stats.totalCondenados.toLocaleString('pt-BR'), icon: IconTransform },
-    { title: "Taxa de Condenação", value: `${stats.taxaCondenacao.toFixed(2)}%`, icon: IconPercentage }
+    {
+      title: 'Animais Abatidos',
+      value: stats.totalAnimais.toLocaleString('pt-BR'),
+      icon: IconScale,
+    },
+    {
+      title: 'Animais Válidos',
+      value: stats.animaisValidos.toLocaleString('pt-BR'),
+      icon: IconMeat,
+    },
+    {
+      title: 'Animais Condenados',
+      value: stats.totalCondenados.toLocaleString('pt-BR'),
+      icon: IconTransform,
+    },
+    {
+      title: 'Taxa de Condenação',
+      value: `${stats.taxaCondenacao.toFixed(2)}%`,
+      icon: IconPercentage,
+    },
   ];
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {cards.map((card, i) => (
-        <motion.div key={card.title} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
+        <motion.div
+          key={card.title}
+          custom={i}
+          initial="hidden"
+          animate="visible"
+          variants={cardVariants}
+        >
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="flex items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
               <card.icon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>

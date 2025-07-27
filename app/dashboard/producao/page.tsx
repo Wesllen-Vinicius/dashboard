@@ -5,7 +5,10 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useDataStore } from '@/store/data.store';
 import { Producao } from '@/lib/schemas';
-import { subscribeToProducoes, setProducaoStatus } from '@/lib/services/producao.services';
+import {
+  subscribeToProducoes,
+  setProducaoStatus,
+} from '@/lib/services/producao.services';
 import { ExpandedState } from '@tanstack/react-table';
 import { ProducaoActions } from './components/producao-actions';
 import { ProducaoTable } from './components/producao-table';
@@ -21,11 +24,15 @@ export default function ProducaoPage() {
   const [showInactive, setShowInactive] = useState(false);
 
   const [isDependencyAlertOpen, setIsDependencyAlertOpen] = useState(false);
-  const [missingDependencies, setMissingDependencies] = useState<{ name: string; link: string }[]>([]);
+  const [missingDependencies, setMissingDependencies] = useState<
+    { name: string; link: string }[]
+  >([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [producaoToEdit, setProducaoToEdit] = useState<Producao | null>(null);
+  const [producaoToEdit, setProducaoToEdit] = useState<Producao | null>(
+    null
+  );
 
-  const { funcionarios, abates, produtos } = useDataStore();
+  const { funcionarios, abates, produtos, unidades } = useDataStore();
 
   useEffect(() => {
     const unsubscribe = subscribeToProducoes(setProducoes, showInactive);
@@ -34,25 +41,40 @@ export default function ProducaoPage() {
 
   useEffect(() => {
     const lowercasedFilter = searchTerm.toLowerCase();
-    const filtered = producoes.filter(item =>
-        item.lote?.toLowerCase().includes(lowercasedFilter) || searchTerm === ''
+    const filtered = producoes.filter(
+      (item) =>
+        item.lote?.toLowerCase().includes(lowercasedFilter) ||
+        searchTerm === ''
     );
     setFilteredProducoes(filtered);
   }, [searchTerm, producoes]);
 
   const handleAddNew = () => {
-    const dependenciesFaltantes = [];
+    const dependenciesFaltantes: { name: string; link: string }[] = [];
 
-    const abatesDisponiveis = abates.filter(a => a.status === 'Aguardando Processamento' || a.status === 'Em Processamento');
+    const abatesDisponiveis = abates.filter(
+      (a) =>
+        a.status === 'Aguardando Processamento' ||
+        a.status === 'Em Processamento'
+    );
     if (abatesDisponiveis.length === 0) {
-      dependenciesFaltantes.push({ name: 'Abates Ativos', link: '/dashboard/abates' });
+      dependenciesFaltantes.push({
+        name: 'Abates Ativos',
+        link: '/dashboard/abates',
+      });
     }
 
-    if (funcionarios.filter(f => f.status === 'ativo').length === 0) {
-      dependenciesFaltantes.push({ name: 'Funcionários Ativos', link: '/dashboard/funcionarios' });
+    if (funcionarios.filter((f) => f.status === 'ativo').length === 0) {
+      dependenciesFaltantes.push({
+        name: 'Funcionários Ativos',
+        link: '/dashboard/funcionarios',
+      });
     }
-    if (produtos.filter(p => p.status === 'ativo').length === 0) {
-      dependenciesFaltantes.push({ name: 'Produtos Ativos', link: '/dashboard/produtos' });
+    if (produtos.filter((p) => p.status === 'ativo').length === 0) {
+      dependenciesFaltantes.push({
+        name: 'Produtos Ativos',
+        link: '/dashboard/produtos',
+      });
     }
 
     if (dependenciesFaltantes.length > 0) {
@@ -70,7 +92,10 @@ export default function ProducaoPage() {
     setIsFormOpen(true);
   };
 
-  const handleSetStatus = async (id: string, status: 'ativo' | 'inativo') => {
+  const handleSetStatus = async (
+    id: string,
+    status: 'ativo' | 'inativo'
+  ) => {
     const action = status === 'inativo' ? 'Inativada' : 'Reativada';
     toast.promise(setProducaoStatus(id, status), {
       loading: `${action === 'Inativada' ? 'Inativando' : 'Reativando'} produção...`,
@@ -104,12 +129,18 @@ export default function ProducaoPage() {
           onShowInactiveChange={setShowInactive}
         />
 
-        <ProducaoStatsCards producoes={producoes} abates={abates} produtos={produtos} />
+        <ProducaoStatsCards
+          producoes={producoes}
+          abates={abates}
+          produtos={produtos}
+        />
 
         <ProducaoTable
           data={filteredProducoes}
           funcionarios={funcionarios}
           abates={abates}
+          produtos={produtos}
+          unidades={unidades}
           onEdit={handleEdit}
           onSetStatus={handleSetStatus}
           expanded={expanded}

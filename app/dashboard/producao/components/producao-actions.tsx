@@ -13,15 +13,20 @@ interface ProducaoActionsProps {
   onShowInactiveChange: (checked: boolean) => void;
 }
 
-export function ProducaoActions({ onAdd, onSearch, showInactive, onShowInactiveChange }: ProducaoActionsProps) {
+export function ProducaoActions({
+  onAdd,
+  onSearch,
+  showInactive,
+  onShowInactiveChange,
+}: ProducaoActionsProps) {
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-      <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-nowrap">
+      <h1 className="text-2xl sm:text-3xl font-bold tracking-tight whitespace-nowrap">
         Gestão de Produção
       </h1>
       <div className="flex w-full sm:w-auto flex-col sm:flex-row items-center gap-2">
         <Input
-          placeholder="Filtrar por lote ou NF do abate..."
+          placeholder="Filtrar por lote..."
           onChange={(e) => onSearch(e.target.value)}
           className="w-full sm:w-auto"
         />

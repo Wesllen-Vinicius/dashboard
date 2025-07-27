@@ -1,58 +1,117 @@
+// src/lib/services/contasAPagar.services.ts
+
 import { db, functions } from "@/lib/firebase";
 import { httpsCallable } from "firebase/functions";
 import {
-    collection,
-    onSnapshot,
-    doc,
-    updateDoc,
-    query,
-    orderBy,
-    runTransaction,
-    Timestamp,
-    serverTimestamp
+  collection,
+  onSnapshot,
+  doc,
+  updateDoc,
+  query,
+  orderBy,
+  Timestamp,
 } from "firebase/firestore";
+import { z } from "zod";
 
-interface ContaAPagar {
-    id: string;
-    valor: number;
-    status: 'Pendente' | 'Paga';
-    despesaId?: string; // ID da despesa se for uma despesa operacional
-}
+/**
+ * Schema de validação de uma Conta a Pagar
+ */
+const contaSchema = z.object({
+  id: z.string(),
+  abateId: z.string().optional(),
+  valor: z.number(),
+  status: z.enum(["Pendente", "Paga"]),
+  descricao: z.string(),
+  dataEmissao: z.date(),
+  dataVencimento: z.date(),
+  createdAt: z.date().optional(),
+  despesaId: z.string().nullable().optional(),
+});
+export type ContaAPagar = z.infer<typeof contaSchema>;
 
-export const subscribeToContasAPagar = (callback: (contas: any[]) => void) => {
-    const q = query(collection(db, "contasAPagar"), orderBy("dataVencimento", "asc"));
-
-    return onSnapshot(q, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            dataEmissao: (doc.data().dataEmissao as Timestamp).toDate(),
-            dataVencimento: (doc.data().dataVencimento as Timestamp).toDate(),
-        }));
-        callback(data);
-    });
+/**
+ * Inscreve num listener que retorna todas as contas a pagar,
+ * ordenadas por data de vencimento ascendente.
+ */
+export const subscribeToContasAPagar = (
+  callback: (contas: ContaAPagar[]) => void
+) => {
+  const q = query(
+    collection(db, "contasAPagar"),
+    orderBy("dataVencimento", "asc")
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const contas: ContaAPagar[] = [];
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const conta = {
+          id: docSnap.id,
+          abateId: data.abateId,
+          valor: data.valor,
+          status: data.status,
+          descricao: data.descricao,
+          dataEmissao:
+            data.dataEmissao instanceof Timestamp
+              ? data.dataEmissao.toDate()
+              : data.dataEmissao,
+          dataVencimento:
+            data.dataVencimento instanceof Timestamp
+              ? data.dataVencimento.toDate()
+              : data.dataVencimento,
+          createdAt:
+            data.createdAt instanceof Timestamp
+              ? data.createdAt.toDate()
+              : data.createdAt,
+          despesaId: data.despesaId ?? null,
+        };
+        // Só adiciona se passar no Zod
+        if (contaSchema.safeParse(conta).success) {
+          contas.push(conta);
+        } else {
+          console.error("Conta inválida:", docSnap.id);
+        }
+      });
+      callback(contas);
+    },
+    (err) => console.error("Erro no listener de Contas a Pagar:", err)
+  );
 };
 
 /**
- * Realiza a baixa de uma conta a pagar de forma segura via Cloud Function.
- * A lógica de transação, como a atualização de saldos e status, agora é executada no servidor.
- * @param conta - O objeto da conta a pagar.
- * @param contaBancariaId - O ID da conta bancária de onde o valor será debitado.
+ * Executa a baixa de uma conta a pagar via Cloud Function.
+ * A Cloud Function deve tratar a transação completa (debitar conta bancária,
+ * mudar status, registrar histórico, etc).
+ *
+ * @param conta - o objeto da conta a pagar
+ * @param contaBancariaId - ID da conta bancária de onde debitar
  */
-export const pagarConta = async (conta: ContaAPagar, contaBancariaId: string) => {
-    try {
-        const pagarContaFunction = httpsCallable(functions, 'pagarContaHttps');
+export const pagarConta = async (
+  conta: ContaAPagar,
+  contaBancariaId: string
+) => {
+  const pagarContaFn = httpsCallable(functions, "pagarContaHttps");
+  try {
+    await pagarContaFn({
+      contaId: conta.id,
+      contaBancariaId,
+      despesaId: conta.despesaId ?? null,
+    });
+  } catch (err: any) {
+    console.error("Erro ao chamar Cloud Function pagarContaHttps:", err);
+    throw new Error(err.message || "Falha ao processar pagamento.");
+  }
+};
 
-        // O UID do usuário que está fazendo a chamada é verificado automaticamente no backend.
-        await pagarContaFunction({
-            contaId: conta.id,
-            contaBancariaId: contaBancariaId,
-            despesaId: conta.despesaId || null, // Envia o ID da despesa, se houver
-        });
-
-    } catch (error: any) {
-        console.error("Erro ao chamar a Cloud Function de pagar conta: ", error);
-        // Lança o erro para que o componente do frontend possa exibi-lo ao usuário.
-        throw new Error(error.message || "Falha ao processar o pagamento.");
-    }
+/**
+ * Marca manualmente uma conta a pagar como Paga ou Pendente.
+ * Útil para ajustes sem passar pela Cloud Function.
+ */
+export const setContaAPagarStatus = async (
+  contaId: string,
+  status: "Pendente" | "Paga"
+) => {
+  const ref = doc(db, "contasAPagar", contaId);
+  await updateDoc(ref, { status });
 };

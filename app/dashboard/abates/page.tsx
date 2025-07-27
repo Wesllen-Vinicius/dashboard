@@ -3,15 +3,20 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { Abate, Fornecedor } from '@/lib/schemas';
+
+import { Abate } from '@/lib/schemas';
 import { subscribeToAbates, setAbateStatus } from '@/lib/services/abates.services';
 import { ExpandedState } from '@tanstack/react-table';
+
 import { DependencyAlert } from '@/components/dependency-alert';
-import { AbateForm } from './components/abate-form';
-import { AbatesActions } from './components/abate-actions';
-import { AbateTable } from './components/abate-table';
 import { useDataStore } from '@/store/data.store';
 
+import { AbateForm } from './components/abate-form';
+import { AbatesActions } from './components/abate-actions';
+import { AbateStatsCards } from './components/abate-stats-cards';
+
+import { AbateTable } from './components/abate-table';
+import { AnaliseAbateCard } from './components/analise-abate-card';
 
 export default function AbatesPage() {
   const [abates, setAbates] = useState<Abate[]>([]);
@@ -24,35 +29,39 @@ export default function AbatesPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [abateToEdit, setAbateToEdit] = useState<Abate | null>(null);
 
+  const [isLoading, setIsLoading] = useState(true);
+
   const { fornecedores } = useDataStore();
 
+  // Subscribe to abates
   useEffect(() => {
-    const unsubscribe = subscribeToAbates((data) => {
+    setIsLoading(true);
+    const unsubscribe = subscribeToAbates((data: Abate[]) => {
       setAbates(data);
-    }, true); // Sempre busca todos para filtrar localmente
+      setIsLoading(false);
+    }, true);
     return () => unsubscribe();
   }, []);
 
+  // Filter by search and status
   useEffect(() => {
-    const lowercasedFilter = searchTerm.toLowerCase();
-    const filteredBySearch = abates.filter(item => {
-        const fornecedor = fornecedores.find(f => f.id === item.fornecedorId);
-        return (
-          item.loteId?.toLowerCase().includes(lowercasedFilter) ||
-          fornecedor?.nomeRazaoSocial.toLowerCase().includes(lowercasedFilter) ||
-          searchTerm === ''
-        )
+    const lower = searchTerm.toLowerCase();
+    const bySearch = abates.filter(a => {
+      const forn = fornecedores.find(f => f.id === a.fornecedorId);
+      return (
+        (!!a.loteId && a.loteId.toLowerCase().includes(lower)) ||
+        !!forn?.nomeRazaoSocial.toLowerCase().includes(lower) ||
+        searchTerm === ''
+      );
     });
-
-    const filteredByStatus = showInactive
-      ? filteredBySearch
-      : filteredBySearch.filter(item => item.status !== 'Cancelado');
-
-    setFilteredAbates(filteredByStatus);
+    const byStatus = showInactive
+      ? bySearch
+      : bySearch.filter(a => a.status !== 'Cancelado');
+    setFilteredAbates(byStatus);
   }, [searchTerm, abates, fornecedores, showInactive]);
 
   const handleAddNew = () => {
-    if (fornecedores.filter(f => f.status === 'ativo').length === 0) {
+    if (!fornecedores.some(f => f.status === 'ativo')) {
       setIsDependencyAlertOpen(true);
       return;
     }
@@ -73,8 +82,8 @@ export default function AbatesPage() {
     });
   };
 
-  const handleReactivate = (id: string) => {
-     toast.error("A reativação de um lote cancelado não é permitida.");
+  const handleReactivate = (_id: string) => {
+    toast.error('A reativação de um lote cancelado não é permitida.');
   };
 
   return (
@@ -82,21 +91,22 @@ export default function AbatesPage() {
       <DependencyAlert
         isOpen={isDependencyAlertOpen}
         onOpenChange={setIsDependencyAlertOpen}
-        dependencies={[
-            { name: 'Fornecedores Ativos', link: '/dashboard/fornecedores' }
-        ]}
+        dependencies={[{ name: 'Fornecedores Ativos', link: '/dashboard/fornecedores' }]}
       />
+
       <AbateForm
         isOpen={isFormOpen}
         onOpenChange={setIsFormOpen}
         abateToEdit={abateToEdit}
       />
+
       <motion.div
         className="space-y-6"
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
+        {/* Actions (search, add) */}
         <AbatesActions
           onAdd={handleAddNew}
           onSearch={setSearchTerm}
@@ -104,16 +114,23 @@ export default function AbatesPage() {
           onShowInactiveChange={setShowInactive}
         />
 
+        {/* Monthly stats cards */}
+        <AbateStatsCards abates={abates} />
+
+        {/* Carcass yield analysis */}
+        <AnaliseAbateCard />
+
+        {/* The main table */}
         <AbateTable
-            abates={filteredAbates}
-            fornecedores={fornecedores}
-            isLoading={false}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onReactivate={handleReactivate}
-            expanded={expanded}
-            onExpandedChange={setExpanded}
-          />
+          abates={filteredAbates}
+          fornecedores={fornecedores}
+          isLoading={isLoading}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onReactivate={handleReactivate}
+          expanded={expanded}
+          onExpandedChange={setExpanded}
+        />
       </motion.div>
     </>
   );

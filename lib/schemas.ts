@@ -1,16 +1,20 @@
+// lib/schemas.ts
+
 import { z } from "zod";
 import { isValidCnpj, isValidCpf } from "./validators";
 
+// 1. Autenticação
 export const loginSchema = z.object({
-    email: z.string().email("Por favor, insira um e-mail válido."),
-    password: z.string().min(6, "A senha deve ter pelo menos 6 caracteres."),
+  email: z.string().email("Por favor, insira um e-mail válido."),
+  password: z.string().min(6, "A senha deve ter pelo menos 6 caracteres."),
 });
 export type LoginValues = z.infer<typeof loginSchema>;
 
+// 2. Usuário
 export const userInfoSchema = z.object({
   uid: z.string(),
   nome: z.string(),
-  role: z.enum(['ADMINISTRADOR', 'USUARIO']).optional(),
+  role: z.enum(["ADMINISTRADOR", "USUARIO"]).optional(),
 });
 export type UserInfo = z.infer<typeof userInfoSchema>;
 
@@ -18,28 +22,34 @@ export const userSchema = z.object({
   uid: z.string(),
   displayName: z.string().min(1, "O nome de exibição é obrigatório."),
   email: z.string().email(),
-  role: z.enum(['ADMINISTRADOR', 'USUARIO']),
-  password: z.string().min(6, "A senha deve ter no mínimo 6 caracteres.").optional().or(z.literal('')),
-  status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
+  role: z.enum(["ADMINISTRADOR", "USUARIO"]),
+  password: z
+    .string()
+    .min(6, "A senha deve ter no mínimo 6 caracteres.")
+    .optional()
+    .or(z.literal("")),
+  status: z.enum(["ativo", "inativo"]).default("ativo").optional(),
   dashboardLayout: z.array(z.string()).optional(),
 });
 export type SystemUser = z.infer<typeof userSchema>;
 
-
+// 3. Endereço
 export const enderecoSchema = z.object({
-    logradouro: z.string().min(1, "O logradouro é obrigatório."),
-    numero: z.string().min(1, "O número é obrigatório."),
-    bairro: z.string().min(1, "O bairro é obrigatório."),
-    cidade: z.string().min(1, "A cidade é obrigatória."),
-    uf: z.string().length(2, "UF deve ter 2 caracteres."),
-    cep: z.string().min(8, "O CEP é obrigatório."),
-    complemento: z.string().optional(),
-    pais: z.string().default("Brasil"),
-    codigoPais: z.string().default("1058"),
+  logradouro: z.string().min(1, "O logradouro é obrigatório."),
+  numero: z.string().min(1, "O número é obrigatório."),
+  bairro: z.string().min(1, "O bairro é obrigatório."),
+  cidade: z.string().min(1, "A cidade é obrigatória."),
+  uf: z.string().length(2, "UF deve ter 2 caracteres."),
+  cep: z.string().min(8, "O CEP é obrigatório."),
+  complemento: z.string().optional(),
+  pais: z.string().default("Brasil"),
+  codigoPais: z.string().default("1058"),
 });
 
-export const IndicadorIEDestinatario = z.enum([ "1", "2", "9" ]);
+// 4. Indicador de IE
+export const IndicadorIEDestinatario = z.enum(["1", "2", "9"]);
 
+// 5. Dados bancários genéricos (interno)
 const dadosBancariosSchema = z.object({
   banco: z.string().min(1, "O nome do banco é obrigatório."),
   agencia: z.string().min(1, "A agência é obrigatória."),
@@ -47,69 +57,94 @@ const dadosBancariosSchema = z.object({
   pix: z.string().optional().or(z.literal("")),
 });
 
+// 6. Cargos
 export const cargoSchema = z.object({
   id: z.string().optional(),
-  nome: z.string().min(3, "O nome do cargo deve ter pelo menos 3 caracteres."),
+  nome: z
+    .string()
+    .min(3, "O nome do cargo deve ter pelo menos 3 caracteres."),
   createdAt: z.any().optional(),
-  status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
+  status: z.enum(["ativo", "inativo"]).default("ativo").optional(),
 });
 export type Cargo = z.infer<typeof cargoSchema>;
 
+// 7. Funcionários
 export const funcionarioSchema = z.object({
   id: z.string().optional(),
   razaoSocial: z.string().min(3, "A Razão Social é obrigatória."),
-  cnpj: z.string().length(18, "O CNPJ deve ter 18 caracteres (com máscara)."),
+  cnpj: z
+    .string()
+    .length(18, "O CNPJ deve ter 18 caracteres (com máscara)."),
   nomeCompleto: z.string().min(3, "O nome completo é obrigatório."),
-  cpf: z.string().length(14, "O CPF deve ter 14 caracteres (com máscara)."),
+  cpf: z
+    .string()
+    .length(14, "O CPF deve ter 14 caracteres (com máscara)."),
   contato: z.string().min(10, "O telefone de contato é obrigatório."),
-  cargoId: z.string({ required_error: "O cargo é obrigatório." }).min(1, "O cargo é obrigatório."),
+  cargoId: z
+    .string({ required_error: "O cargo é obrigatório." })
+    .min(1, "O cargo é obrigatório."),
   cargoNome: z.string().optional(),
   banco: z.string().min(1, "O banco é obrigatório."),
   agencia: z.string().min(1, "A agência é obrigatória."),
   conta: z.string().min(1, "A conta é obrigatória."),
   endereco: enderecoSchema.optional(),
   createdAt: z.any().optional(),
-  status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
+  status: z.enum(["ativo", "inativo"]).default("ativo").optional(),
 });
 export type Funcionario = z.infer<typeof funcionarioSchema>;
 
+// 8. Unidades de medida
 export const unidadeSchema = z.object({
   id: z.string().optional(),
-  nome: z.string().min(1, 'O nome da unidade é obrigatório.'),
-  sigla: z.string().min(1, 'A sigla é obrigatória.').max(10, 'A sigla deve ter no máximo 10 caracteres.'),
+  nome: z.string().min(1, "O nome da unidade é obrigatório."),
+  sigla: z
+    .string()
+    .min(1, "A sigla é obrigatória.")
+    .max(10, "A sigla deve ter no máximo 10 caracteres."),
   createdAt: z.any().optional(),
-  status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
+  status: z.enum(["ativo", "inativo"]).default("ativo").optional(),
 });
 export type Unidade = z.infer<typeof unidadeSchema>;
 
+// 9. Categorias
 export const categoriaSchema = z.object({
   id: z.string().optional(),
-  nome: z.string().min(1, 'O nome da categoria é obrigatório.'),
+  nome: z.string().min(1, "O nome da categoria é obrigatório."),
   createdAt: z.any().optional(),
-  status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
+  status: z.enum(["ativo", "inativo"]).default("ativo").optional(),
 });
 export type Categoria = z.infer<typeof categoriaSchema>;
 
+// 10. Produtos
 const baseProdutoSchema = z.object({
   id: z.string().optional(),
   codigo: z.string().optional(),
   quantidade: z.number().default(0).optional(),
   createdAt: z.any().optional(),
-  status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
+  status: z.enum(["ativo", "inativo"]).default("ativo").optional(),
 });
 
 export const produtoVendaSchema = baseProdutoSchema.extend({
   tipoProduto: z.literal("VENDA"),
   nome: z.string().min(3, "A descrição do produto é obrigatória."),
-  unidadeId: z.string({ required_error: "Selecione uma unidade." }).min(1, "Selecione uma unidade."),
-  precoVenda: z.coerce.number().positive("O preço de venda deve ser positivo."),
+  unidadeId: z
+    .string({ required_error: "Selecione uma unidade." })
+    .min(1, "Selecione uma unidade."),
+  precoVenda: z.coerce.number().positive(
+    "O preço de venda deve ser positivo."
+  ),
   custoUnitario: z.coerce.number().min(0),
   metaPorAnimal: z.coerce.number().min(0).optional(),
   sku: z.string().optional().or(z.literal("")),
-  ncm: z.string().min(8, "NCM é obrigatório e deve ter 8 dígitos.").max(8),
-  cfop: z.string().min(4, "CFOP é obrigatório e deve ter 4 dígitos.").max(4),
+  ncm: z
+    .string()
+    .min(8, "NCM é obrigatório e deve ter 8 dígitos.")
+    .max(8),
+  cfop: z
+    .string()
+    .min(4, "CFOP é obrigatório e deve ter 4 dígitos.")
+    .max(4),
   cest: z.string().optional().or(z.literal("")),
-  // Campos de Lote e Validade adicionados
   controlaLote: z.boolean().default(false).optional(),
   diasValidade: z.coerce.number().min(0).optional(),
 });
@@ -117,14 +152,20 @@ export const produtoVendaSchema = baseProdutoSchema.extend({
 export const produtoUsoInternoSchema = baseProdutoSchema.extend({
   tipoProduto: z.literal("USO_INTERNO"),
   nome: z.string().min(3, "A descrição do item é obrigatória."),
-  categoriaId: z.string({ required_error: "Selecione uma categoria." }).min(1, "Selecione uma categoria."),
-  custoUnitario: z.coerce.number().positive("O preço de custo deve ser positivo."),
+  categoriaId: z
+    .string({ required_error: "Selecione uma categoria." })
+    .min(1, "Selecione uma categoria."),
+  custoUnitario: z.coerce.number().positive(
+    "O preço de custo deve ser positivo."
+  ),
 });
 
 export const produtoMateriaPrimaSchema = baseProdutoSchema.extend({
   tipoProduto: z.literal("MATERIA_PRIMA"),
   nome: z.string().min(3, "O nome da matéria-prima é obrigatório."),
-  unidadeId: z.string({ required_error: "Selecione uma unidade." }),
+  unidadeId: z
+    .string({ required_error: "Selecione uma unidade." })
+    .min(1),
   custoUnitario: z.coerce.number().min(0, "O custo não pode ser negativo."),
   metaPorAnimal: z.coerce.number().min(0).optional(),
 });
@@ -135,65 +176,121 @@ export const produtoSchema = z.discriminatedUnion("tipoProduto", [
   produtoMateriaPrimaSchema,
 ]);
 
-export type Produto = z.infer<typeof produtoSchema> & { unidadeNome?: string; categoriaNome?: string };
+export type Produto = z.infer<typeof produtoSchema> & {
+  unidadeNome?: string;
+  categoriaNome?: string;
+};
 export type ProdutoVenda = z.infer<typeof produtoVendaSchema>;
 export type ProdutoUsoInterno = z.infer<typeof produtoUsoInternoSchema>;
 export type ProdutoMateriaPrima = z.infer<typeof produtoMateriaPrimaSchema>;
 
+// 11. Compras
 const itemCompradoSchema = z.object({
   produtoId: z.string().min(1, "Selecione um produto."),
   produtoNome: z.string(),
-  quantidade: z.coerce.number().positive("A quantidade deve ser positiva."),
-  custoUnitario: z.coerce.number().min(0, "O custo não pode ser negativo."),
+  quantidade: z.coerce
+    .number()
+    .positive("A quantidade deve ser positiva."),
+  custoUnitario: z
+    .coerce.number()
+    .min(0, "O custo não pode ser negativo."),
 });
 
-export const compraSchema = z.object({
-  id: z.string().optional(),
-  fornecedorId: z.string().min(1, "Selecione um fornecedor."),
-  notaFiscal: z.string().min(1, "O número da nota fiscal é obrigatório."),
-  data: z.date({ required_error: "A data é obrigatória." }),
-  itens: z.array(itemCompradoSchema).min(1, "Adicione pelo menos um item."),
-  valorTotal: z.coerce.number(),
-  contaBancariaId: z.string().min(1, "A conta de origem é obrigatória."),
-  condicaoPagamento: z.enum(["A_VISTA", "A_PRAZO"], { required_error: "Selecione a condição." }),
-  numeroParcelas: z.coerce.number().min(1, "Pelo menos uma parcela é necessária.").optional(),
-  dataPrimeiroVencimento: z.date().optional(),
-  createdAt: z.any().optional(),
-  status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
-}).refine((data) => {
-    if (data.condicaoPagamento === 'A_PRAZO') {
-        return !!data.numeroParcelas && !!data.dataPrimeiroVencimento;
+export const compraSchema = z
+  .object({
+    id: z.string().optional(),
+    fornecedorId: z.string().min(1, "Selecione um fornecedor."),
+    notaFiscal: z
+      .string()
+      .min(1, "O número da nota fiscal é obrigatório."),
+    data: z.date({ required_error: "A data é obrigatória." }),
+    itens: z
+      .array(itemCompradoSchema)
+      .min(1, "Adicione pelo menos um item."),
+    valorTotal: z.coerce.number(),
+    contaBancariaId: z
+      .string()
+      .min(1, "A conta de origem é obrigatória."),
+    condicaoPagamento: z.enum(["A_VISTA", "A_PRAZO"], {
+      required_error: "Selecione a condição.",
+    }),
+    numeroParcelas: z
+      .coerce.number()
+      .min(1, "Pelo menos uma parcela é necessária.")
+      .optional(),
+    dataPrimeiroVencimento: z.date().optional(),
+    createdAt: z.any().optional(),
+    status: z.enum(["ativo", "inativo"]).default("ativo").optional(),
+  })
+  .refine(
+    (data) =>
+      data.condicaoPagamento === "A_VISTA" ||
+      (data.numeroParcelas && data.dataPrimeiroVencimento),
+    {
+      message:
+        "Para pagamentos a prazo, o número de parcelas e a data do primeiro vencimento são obrigatórios.",
+      path: ["numeroParcelas"],
     }
-    return true;
-}, {
-    message: "Para pagamentos a prazo, o número de parcelas e a data do primeiro vencimento são obrigatórios.",
-    path: ["numeroParcelas"],
-});
+  );
 export type Compra = z.infer<typeof compraSchema>;
 
+// 12. Abates
 export const abateSchema = z.object({
-    id: z.string().optional(),
-    loteId: z.string().optional(),
-    data: z.date({ required_error: "A data é obrigatória." }),
-    fornecedorId: z.string().min(1, "O fornecedor é obrigatório."),
-    numeroAnimais: z.coerce.number().positive("O número de animais deve ser maior que zero."),
-    custoPorAnimal: z.coerce.number().positive("O custo por animal deve ser positivo."),
-    custoTotal: z.coerce.number().positive().optional(),
-    condenado: z.coerce.number().min(0, "A quantidade de condenados não pode ser negativa.").default(0),
-    registradoPor: z.object({ uid: z.string(), nome: z.string(), role: z.enum(['ADMINISTRADOR', 'USUARIO']).optional(), }),
-    createdAt: z.any().optional(),
-    status: z.enum(['Aguardando Processamento', 'Em Processamento', 'Finalizado', 'Cancelado']).default('Aguardando Processamento').optional(),
+  id: z.string().optional(),
+  loteId: z.string().optional(),
+  data: z.date({ required_error: "A data é obrigatória." }),
+  fornecedorId: z
+    .string()
+    .min(1, "O fornecedor é obrigatório."),
+  numeroAnimais: z
+    .coerce.number()
+    .positive("O número de animais deve ser maior que zero."),
+  custoPorAnimal: z
+    .coerce.number()
+    .positive("O custo por animal deve ser positivo."),
+  custoTotal: z.coerce.number().positive().optional(),
+  condenado: z
+    .coerce.number()
+    .min(0, "A quantidade de condenados não pode ser negativa.")
+    .default(0),
+  registradoPor: z.object({
+    uid: z.string(),
+    nome: z.string(),
+    role: z.enum(["ADMINISTRADOR", "USUARIO"]).optional(),
+  }),
+  createdAt: z.any().optional(),
+  status: z
+    .enum([
+      "Aguardando Processamento",
+      "Em Processamento",
+      "Finalizado",
+      "Cancelado",
+    ])
+    .default("Aguardando Processamento")
+    .optional(),
 });
 export type Abate = z.infer<typeof abateSchema>;
 
+// 13. Itens Produzidos (com unidade)
 export const itemProduzidoSchema = z.object({
   produtoId: z.string().min(1, "Selecione um produto."),
   produtoNome: z.string(),
-  quantidade: z.coerce.number().min(0, "A quantidade deve ser um número positivo."),
-  perda: z.coerce.number().min(0, "A perda não pode ser negativa."),
+  quantidade: z
+    .coerce.number()
+    .min(0, "A quantidade deve ser um número positivo."),
+  perda: z
+    .coerce.number()
+    .min(0, "A perda não pode ser negativa."),
+  unidadeId: z
+    .string({ required_error: "Selecione uma unidade." })
+    .min(1, "Selecione uma unidade."),
+  unidadeSigla: z
+    .string()
+    .min(1, "Sigla da unidade é obrigatória."),
 });
 export type ItemProduzido = z.infer<typeof itemProduzidoSchema>;
 
+// 14. Produções
 export const producaoSchema = z.object({
   id: z.string().optional(),
   data: z.date({ required_error: "A data é obrigatória." }),
@@ -201,18 +298,30 @@ export const producaoSchema = z.object({
   abateId: z.string().min(1, "Selecione um abate para vincular."),
   lote: z.string().optional(),
   descricao: z.string().optional(),
-  produtos: z.array(itemProduzidoSchema).min(1, "Adicione pelo menos um produto à produção."),
-  registradoPor: z.object({ uid: z.string(), nome: z.string(), role: z.enum(['ADMINISTRADOR', 'USUARIO']).optional(), }),
+  produtos: z
+    .array(itemProduzidoSchema)
+    .min(1, "Adicione pelo menos um produto à produção."),
+  registradoPor: z.object({
+    uid: z.string(),
+    nome: z.string(),
+    role: z.enum(["ADMINISTRADOR", "USUARIO"]).optional(),
+  }),
   createdAt: z.any().optional(),
-  status: z.enum(['ativo', 'inativo']).default('ativo').optional(),
+  status: z.enum(["ativo", "inativo"]).default("ativo").optional(),
 });
 export type Producao = z.infer<typeof producaoSchema>;
 
 export const producaoFormSchema = producaoSchema.pick({
-    data: true, responsavelId: true, abateId: true, lote: true, descricao: true, produtos: true,
+  data: true,
+  responsavelId: true,
+  abateId: true,
+  lote: true,
+  descricao: true,
+  produtos: true,
 });
 export type ProducaoFormValues = z.infer<typeof producaoFormSchema>;
 
+// 15. Vendas
 export const itemVendidoSchema = z.object({
   produtoId: z.string(),
   produtoNome: z.string(),
@@ -226,27 +335,38 @@ export const vendaSchema = z.object({
   id: z.string().optional(),
   clienteId: z.string().min(1, "Selecione um cliente."),
   data: z.date({ required_error: "A data é obrigatória." }),
-  produtos: z.array(itemVendidoSchema).min(1, "Adicione pelo menos um produto à venda."),
-  valorTotal: z.coerce.number().min(0, "O valor total não pode ser negativo."),
-  condicaoPagamento: z.enum(["A_VISTA", "A_PRAZO"], { required_error: "Selecione a condição." }),
-  metodoPagamento: z.string({ required_error: "O método de pagamento é obrigatório." }).min(1, "O método de pagamento é obrigatório."),
+  produtos: z
+    .array(itemVendidoSchema)
+    .min(1, "Adicione pelo menos um produto à venda."),
+  valorTotal: z
+    .coerce.number()
+    .min(0, "O valor total não pode ser negativo."),
+  condicaoPagamento: z.enum(["A_VISTA", "A_PRAZO"], {
+    required_error: "Selecione a condição.",
+  }),
+  metodoPagamento: z
+    .string({ required_error: "O método de pagamento é obrigatório." })
+    .min(1, "O método de pagamento é obrigatório."),
   contaBancariaId: z.string().optional(),
   numeroParcelas: z.coerce.number().optional(),
   taxaCartao: z.coerce.number().optional(),
   valorFinal: z.number().optional(),
   dataVencimento: z.date().optional(),
-  status: z.enum(['Paga', 'Pendente']).default('Pendente'),
-  registradoPor: z.object({ uid: z.string(), nome: z.string(), }),
+  status: z.enum(["Paga", "Pendente"]).default("Pendente"),
+  registradoPor: z.object({ uid: z.string(), nome: z.string() }),
   createdAt: z.any().optional(),
-  nfe: z.object({
-    id: z.string().optional(),
-    status: z.string().optional(),
-    url_danfe: z.string().optional(),
-    url_xml: z.string().optional(),
-  }).optional(),
+  nfe: z
+    .object({
+      id: z.string().optional(),
+      status: z.string().optional(),
+      url_danfe: z.string().optional(),
+      url_xml: z.string().optional(),
+    })
+    .optional(),
 });
 export type Venda = z.infer<typeof vendaSchema>;
 
+// 16. Movimentações de Estoque
 export const movimentacaoSchema = z.object({
   id: z.string().optional(),
   produtoId: z.string().min(1, "Selecione um produto."),
@@ -255,13 +375,13 @@ export const movimentacaoSchema = z.object({
   tipo: z.enum(["entrada", "saida"]),
   motivo: z.string().optional(),
   data: z.any().optional(),
-  registradoPor: z.object({
-      uid: z.string(),
-      nome: z.string().nullable()
-  }).optional(),
+  registradoPor: z
+    .object({ uid: z.string(), nome: z.string().nullable() })
+    .optional(),
 });
 export type Movimentacao = z.infer<typeof movimentacaoSchema>;
 
+// 17. Contas a Receber
 export const contaAReceberSchema = z.object({
   id: z.string(),
   vendaId: z.string(),
@@ -270,54 +390,91 @@ export const contaAReceberSchema = z.object({
   valor: z.number(),
   dataEmissao: z.any(),
   dataVencimento: z.any(),
-  status: z.enum(['Pendente', 'Recebida']),
+  status: z.enum(["Pendente", "Recebida"]),
 });
 export type ContaAReceber = z.infer<typeof contaAReceberSchema>;
 
+// 18. Despesas Operacionais
 export const despesaOperacionalSchema = z.object({
-    id: z.string().optional(),
-    descricao: z.string().min(3, "A descrição é obrigatória."),
-    valor: z.coerce.number().positive("O valor deve ser positivo."),
-    dataVencimento: z.date({ required_error: "A data de vencimento é obrigatória." }),
-    categoria: z.string().min(3, "A categoria é obrigatória."),
-    contaBancariaId: z.string().min(1, "Selecione a conta para débito."),
-    status: z.enum(['Pendente', 'Paga']),
-    createdAt: z.any().optional(),
+  id: z.string().optional(),
+  descricao: z.string().min(3, "A descrição é obrigatória."),
+  valor: z.coerce.number().positive("O valor deve ser positivo."),
+  dataVencimento: z.date({
+    required_error: "A data de vencimento é obrigatória.",
+  }),
+  categoria: z.string().min(3, "A categoria é obrigatória."),
+  contaBancariaId: z
+    .string()
+    .min(1, "Selecione a conta para débito."),
+  status: z.enum(["Pendente", "Paga"]),
+  createdAt: z.any().optional(),
 });
-export type DespesaOperacional = z.infer<typeof despesaOperacionalSchema>;
+export type DespesaOperacional = z.infer<
+  typeof despesaOperacionalSchema
+>;
 
+// 19. Company Info
 export const companyInfoSchema = z.object({
   razaoSocial: z.string().min(3, "A Razão Social é obrigatória."),
   nomeFantasia: z.string().min(3, "O nome fantasia é obrigatório."),
-  cnpj: z.string().length(18, "O CNPJ deve ter 14 dígitos."),
-  inscricaoEstadual: z.string().min(1, "A Inscrição Estadual é obrigatória."),
+  cnpj: z
+    .string()
+    .length(18, "O CNPJ deve ter 14 dígitos."),
+  inscricaoEstadual: z
+    .string()
+    .min(1, "A Inscrição Estadual é obrigatória."),
   endereco: enderecoSchema,
   telefone: z.string().min(10, "O telefone é obrigatório."),
   email: z.string().email("Insira um e-mail válido."),
-  regimeTributario: z.enum(["1", "3"], { required_error: "Selecione um regime tributário." }).default("3"),
-  configuracaoFiscal: z.object({
-    cfop_padrao: z.string().length(4, "O CFOP deve ter 4 dígitos.").default("5101"),
-    cst_padrao: z.string().min(2, "O CST é obrigatório.").default("040"),
-    aliquota_icms_padrao: z.coerce.number().min(0).default(0),
-    reducao_bc_padrao: z.coerce.number().min(0).default(0),
-    informacoes_complementares: z.string().optional().default(""),
-  }).default({}),
+  regimeTributario: z
+    .enum(["1", "3"], { required_error: "Selecione um regime tributário." })
+    .default("3"),
+  configuracaoFiscal: z
+    .object({
+      cfop_padrao: z
+        .string()
+        .length(4, "O CFOP deve ter 4 dígitos.")
+        .default("5101"),
+      cst_padrao: z
+        .string()
+        .min(2, "O CST é obrigatório.")
+        .default("040"),
+      aliquota_icms_padrao: z.coerce.number().min(0).default(0),
+      reducao_bc_padrao: z.coerce.number().min(0).default(0),
+      informacoes_complementares: z
+        .string()
+        .optional()
+        .default(""),
+    })
+    .default({}),
 });
-
 export type CompanyInfo = z.infer<typeof companyInfoSchema>;
 
+// 20. Permissões e Papéis
 export const modulosDePermissao = {
-    clientes: "Clientes", fornecedores: "Fornecedores", produtos: "Produtos", funcionarios: "Funcionários",
-    cargos: "Cargos de Funcionários", usuarios: "Usuários do Sistema", permissoes: "Funções e Permissões",
-    compras: "Compras", abates: "Abates", producao: "Produção", vendas: "Vendas", estoque: "Ajuste de Estoque",
-    financeiro: "Financeiro (Geral)", relatorios: "Relatórios", metas: "Metas", settings: "Configurações da Empresa"
+  clientes: "Clientes",
+  fornecedores: "Fornecedores",
+  produtos: "Produtos",
+  funcionarios: "Funcionários",
+  cargos: "Cargos de Funcionários",
+  usuarios: "Usuários do Sistema",
+  permissoes: "Funções e Permissões",
+  compras: "Compras",
+  abates: "Abates",
+  producao: "Produção",
+  vendas: "Vendas",
+  estoque: "Ajuste de Estoque",
+  financeiro: "Financeiro (Geral)",
+  relatorios: "Relatórios",
+  metas: "Metas",
+  settings: "Configurações da Empresa",
 };
 
 const acoesPermissaoSchema = z.object({
-    ler: z.boolean().default(false),
-    criar: z.boolean().default(false),
-    editar: z.boolean().default(false),
-    inativar: z.boolean().default(false),
+  ler: z.boolean().default(false),
+  criar: z.boolean().default(false),
+  editar: z.boolean().default(false),
+  inativar: z.boolean().default(false),
 });
 
 const permissoesSchema = z.object(
@@ -333,8 +490,9 @@ export const roleSchema = z.object({
   descricao: z.string().optional(),
   permissoes: permissoesSchema.default({}),
 });
-
 export type Role = z.infer<typeof roleSchema>;
+
+// 21. Contas Bancárias
 export const contaBancariaSchema = z.object({
   id: z.string().optional(),
   nomeConta: z.string().min(3, "O nome da conta é obrigatório."),
@@ -345,34 +503,45 @@ export const contaBancariaSchema = z.object({
   saldoInicial: z.coerce.number().optional(),
   saldoAtual: z.coerce.number().optional(),
   status: z.enum(["ativa", "inativa"]),
-  registradoPor: z.object({
-    uid: z.string(),
-    nome: z.string(),
-  }).optional(),
+  registradoPor: z
+    .object({ uid: z.string(), nome: z.string() })
+    .optional(),
   createdAt: z.any().optional(),
 });
+export type ContaBancaria = z.infer<typeof contaBancariaSchema>;
 
-export const ContaBancariaFormSchema = contaBancariaSchema.pick({
+export const ContaBancariaFormSchema = contaBancariaSchema
+  .pick({
     nomeConta: true,
     banco: true,
     agencia: true,
     conta: true,
     tipo: true,
-}).extend({
-    saldoInicial: z.coerce.number({ required_error: "O saldo inicial é obrigatório." }),
-});
+  })
+  .extend({
+    saldoInicial: z.coerce.number({
+      required_error: "O saldo inicial é obrigatório.",
+    }),
+  });
+export type ContaBancariaFormValues = z.infer<
+  typeof ContaBancariaFormSchema
+>;
 
-export type ContaBancaria = z.infer<typeof contaBancariaSchema>;
-
+// 22. Fornecedores
 export const fornecedorSchema = z.object({
   id: z.string().optional(),
   status: z.enum(["ativo", "inativo"]),
   tipoPessoa: z.enum(["juridica", "fisica"]),
-  cpfCnpj: z.string().refine((val) => isValidCpf(val) || isValidCnpj(val), "CPF/CNPJ inválido."),
-  nomeRazaoSocial: z.string().min(3, "Nome ou Razão Social é obrigatório."),
+  cpfCnpj: z.string().refine(
+    (val) => isValidCpf(val) || isValidCnpj(val),
+    "CPF/CNPJ inválido."
+  ),
+  nomeRazaoSocial: z
+    .string()
+    .min(3, "Nome ou Razão Social é obrigatório."),
   nomeFantasia: z.string().optional(),
   inscricaoEstadual: z.string().optional(),
-  email: z.string().email("E-mail inválido.").optional().or(z.literal('')),
+  email: z.string().email("E-mail inválido.").optional().or(z.literal("")),
   telefone: z.string().optional(),
   endereco: enderecoSchema.optional(),
   banco: z.object({
@@ -381,62 +550,64 @@ export const fornecedorSchema = z.object({
     conta: z.string().optional(),
     pix: z.string().optional(),
   }).optional(),
-  registradoPor: z.object({
-    uid: z.string(),
-    nome: z.string(),
-  }).optional(),
+  registradoPor: z
+    .object({ uid: z.string(), nome: z.string() })
+    .optional(),
   createdAt: z.any().optional(),
 });
-
 export const FornecedorFormSchema = fornecedorSchema.pick({
-    tipoPessoa: true,
-    cpfCnpj: true,
-    nomeRazaoSocial: true,
-    nomeFantasia: true,
-    inscricaoEstadual: true,
-    email: true,
-    telefone: true,
-    endereco: true,
-    banco: true,
+  tipoPessoa: true,
+  cpfCnpj: true,
+  nomeRazaoSocial: true,
+  nomeFantasia: true,
+  inscricaoEstadual: true,
+  email: true,
+  telefone: true,
+  endereco: true,
+  banco: true,
 });
-
 export type Fornecedor = z.infer<typeof fornecedorSchema>;
 
+// 23. Clientes
 export const clienteSchema = z.object({
   id: z.string().optional(),
   status: z.enum(["ativo", "inativo"]),
   tipoPessoa: z.enum(["juridica", "fisica"]),
-  cpfCnpj: z.string().refine((val) => isValidCpf(val) || isValidCnpj(val), "CPF/CNPJ inválido."),
-  nomeRazaoSocial: z.string().min(3, "Nome ou Razão Social é obrigatório."),
+  cpfCnpj: z.string().refine(
+    (val) => isValidCpf(val) || isValidCnpj(val),
+    "CPF/CNPJ inválido."
+  ),
+  nomeRazaoSocial: z
+    .string()
+    .min(3, "Nome ou Razão Social é obrigatório."),
   nomeFantasia: z.string().optional(),
   inscricaoEstadual: z.string().optional(),
-  email: z.string().email("E-mail inválido.").optional().or(z.literal('')),
+  email: z.string().email("E-mail inválido.").optional().or(z.literal("")),
   telefone: z.string().optional(),
-  endereco: z.object({
-    cep: z.string().optional(),
-    logradouro: z.string().optional(),
-    numero: z.string().optional(),
-    complemento: z.string().optional(),
-    bairro: z.string().optional(),
-    cidade: z.string().optional(),
-    uf: z.string().optional(),
-  }).optional(),
-  registradoPor: z.object({
-    uid: z.string(),
-    nome: z.string(),
-  }).optional(),
+  endereco: z
+    .object({
+      cep: z.string().optional(),
+      logradouro: z.string().optional(),
+      numero: z.string().optional(),
+      complemento: z.string().optional(),
+      bairro: z.string().optional(),
+      cidade: z.string().optional(),
+      uf: z.string().optional(),
+    })
+    .optional(),
+  registradoPor: z
+    .object({ uid: z.string(), nome: z.string() })
+    .optional(),
   createdAt: z.any().optional(),
 });
-
 export const ClienteFormSchema = clienteSchema.pick({
-    tipoPessoa: true,
-    cpfCnpj: true,
-    nomeRazaoSocial: true,
-    nomeFantasia: true,
-    inscricaoEstadual: true,
-    email: true,
-    telefone: true,
-    endereco: true,
+  tipoPessoa: true,
+  cpfCnpj: true,
+  nomeRazaoSocial: true,
+  nomeFantasia: true,
+  inscricaoEstadual: true,
+  email: true,
+  telefone: true,
+  endereco: true,
 });
-
 export type Cliente = z.infer<typeof clienteSchema>;
