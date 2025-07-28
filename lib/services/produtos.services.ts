@@ -15,7 +15,7 @@ import { Produto, produtoSchema } from "@/lib/schemas";
 
 const produtosCollection = collection(db, "produtos");
 
-// Função mantida para a página de Produtos
+// Assina os produtos ordenados por nome (uso na tela de vendas/NF)
 export const subscribeToProdutos = (
   callback: (produtos: Produto[]) => void
 ) => {
@@ -23,38 +23,38 @@ export const subscribeToProdutos = (
 
   return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
     const data: Produto[] = [];
-    querySnapshot.forEach((doc) => {
-      data.push({ id: doc.id, ...doc.data() } as Produto);
+    querySnapshot.forEach((docSnap) => {
+      // Trata campos para consistência (pode adicionar aqui .toDate se houver campos Date no produto futuramente)
+      data.push({ id: docSnap.id, ...docSnap.data() } as Produto);
     });
     callback(data);
   });
 };
 
-// --- NOVA FUNÇÃO ADICIONADA ---
-// Função para buscar todos os produtos para o painel de Metas e outros locais
+// Assinatura alternativa: busca todos os produtos sem ordenação
 export const subscribeToAllProducts = (
-    callback: (produtos: Produto[]) => void
+  callback: (produtos: Produto[]) => void
 ) => {
-    const q = query(produtosCollection); // Sem ordenação específica, mais genérico
+  const q = query(produtosCollection);
 
-    return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-        const data: Produto[] = [];
-        querySnapshot.forEach((doc) => {
-            // Validação para garantir que os dados estão consistentes
-            const parsed = produtoSchema.safeParse({ id: doc.id, ...doc.data() });
-            if (parsed.success) {
-                data.push(parsed.data as Produto);
-            } else {
-                console.warn("Documento de produto com schema inválido:", doc.id, parsed.error.format());
-            }
-        });
-        callback(data);
-    }, (error) => {
-        console.error("Erro ao buscar produtos:", error);
+  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
+    const data: Produto[] = [];
+    querySnapshot.forEach((docSnap) => {
+      // Valida o schema para evitar produtos inválidos (especialmente para NF-e)
+      const parsed = produtoSchema.safeParse({ id: docSnap.id, ...docSnap.data() });
+      if (parsed.success) {
+        data.push(parsed.data as Produto);
+      } else {
+        console.warn("Produto inválido para schema:", docSnap.id, parsed.error.format());
+      }
     });
+    callback(data);
+  }, (error) => {
+    console.error("Erro ao buscar produtos:", error);
+  });
 };
 
-
+// Adiciona novo produto (completo, pronto para cadastro de produtos de venda ou matéria-prima)
 export const addProduto = async (
   data: Omit<Produto, "id" | "status" | "createdAt" | "quantidade">
 ) => {
@@ -70,6 +70,7 @@ export const addProduto = async (
   return docRef.id;
 };
 
+// Atualiza qualquer campo do produto (inclusive fiscais: NCM, CFOP, unidade, etc)
 export const updateProduto = async (
   id: string,
   data: Partial<Omit<Produto, "id" | "status" | "createdAt" | "quantidade">>
@@ -78,6 +79,7 @@ export const updateProduto = async (
   await updateDoc(docRef, data);
 };
 
+// Ativa/inativa produto
 export const setProdutoStatus = async (
   id: string,
   status: "ativo" | "inativo"

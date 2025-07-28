@@ -1,5 +1,5 @@
 // cypress/component/NfePreviewModal.cy.tsx
-import { NfePreviewModal } from '@/components/nfe-preview-modal';
+import { NfePreviewModal } from '@/components/NfePreviewModal';
 import { Venda, CompanyInfo, Cliente, Produto, Unidade } from '@/lib/schemas';
 
 describe('<NfePreviewModal />', () => {

@@ -17,7 +17,7 @@ import { subscribeToVendas } from '@/lib/services/vendas.services';
 import { subscribeToComprasByDateRange } from '@/lib/services/compras.services';
 import { subscribeToUsers } from '@/lib/services/user.services';
 import { subscribeToContasBancarias } from '@/lib/services/contasBancarias.services';
-import { subscribeToMovimentacoes } from '@/lib/services/estoque.services'; // <-- Importação adicionada
+import { subscribeToMovimentacoes } from '@/lib/services/estoque.services';
 
 interface DataState {
   isDataLoaded: boolean;
@@ -36,57 +36,67 @@ interface DataState {
   vendas: Venda[];
   users: SystemUser[];
   contasBancarias: ContaBancaria[];
-  movimentacoes: Movimentacao[]; // <-- Propriedade adicionada
+  movimentacoes: Movimentacao[];
+
+  /** Atualiza a venda localmente (por exemplo, após emissão/cancelamento de NF-e) */
+  updateVendaLocally: (id: string, data: Partial<Venda>) => void;
 }
 
 let unsubscribers: Unsubscribe[] = [];
 
 const initialState = {
-    isDataLoaded: false,
-    clientes: [],
-    fornecedores: [],
-    produtos: [],
-    funcionarios: [],
-    cargos: [],
-    unidades: [],
-    categorias: [],
-    compras: [],
-    abates: [],
-    producoes: [],
-    vendas: [],
-    users: [],
-    contasBancarias: [],
-    movimentacoes: [], // <-- Propriedade adicionada
-}
+  isDataLoaded: false,
+  clientes: [],
+  fornecedores: [],
+  produtos: [],
+  funcionarios: [],
+  cargos: [],
+  unidades: [],
+  categorias: [],
+  compras: [],
+  abates: [],
+  producoes: [],
+  vendas: [],
+  users: [],
+  contasBancarias: [],
+  movimentacoes: [],
+};
 
 export const useDataStore = create<DataState>((set, get) => ({
-    ...initialState,
-    initializeSubscribers: () => {
-      if (get().isDataLoaded) return;
+  ...initialState,
+  initializeSubscribers: () => {
+    if (get().isDataLoaded) return;
 
-      const subscriptions = [
-        subscribeToClientes((data) => set({ clientes: data })),
-        subscribeToFornecedores((data) => set({ fornecedores: data })),
-        subscribeToProdutos((data) => set({ produtos: data })),
-        subscribeToFuncionarios((data) => set({ funcionarios: data })),
-        subscribeToCargos((data) => set({ cargos: data })),
-        subscribeToUnidades((data) => set({ unidades: data })),
-        subscribeToCategorias((data) => set({ categorias: data })),
-        subscribeToAbatesByDateRange(undefined, (data) => set({ abates: data })),
-        subscribeToProducoes((data) => set({ producoes: data })),
-        subscribeToVendas((data) => set({ vendas: data })),
-        subscribeToComprasByDateRange(undefined, (data) => set({ compras: data })),
-        subscribeToUsers((data) => set({ users: data })),
-        subscribeToContasBancarias((data) => set({ contasBancarias: data })),
-        subscribeToMovimentacoes((data) => set({ movimentacoes: data })), // <-- Inscrição adicionada
-      ];
+    const subscriptions = [
+      subscribeToClientes((data) => set({ clientes: data })),
+      subscribeToFornecedores((data) => set({ fornecedores: data })),
+      subscribeToProdutos((data) => set({ produtos: data })),
+      subscribeToFuncionarios((data) => set({ funcionarios: data })),
+      subscribeToCargos((data) => set({ cargos: data })),
+      subscribeToUnidades((data) => set({ unidades: data })),
+      subscribeToCategorias((data) => set({ categorias: data })),
+      subscribeToAbatesByDateRange(undefined, (data) => set({ abates: data })),
+      subscribeToProducoes((data) => set({ producoes: data })),
+      subscribeToVendas((data) => set({ vendas: data })),
+      subscribeToComprasByDateRange(undefined, (data) => set({ compras: data })),
+      subscribeToUsers((data) => set({ users: data })),
+      subscribeToContasBancarias((data) => set({ contasBancarias: data })),
+      subscribeToMovimentacoes((data) => set({ movimentacoes: data })),
+    ];
 
-      unsubscribers = subscriptions;
-      set({ isDataLoaded: true });
-    },
-    clearSubscribers: () => {
-      unsubscribers.forEach(unsub => unsub());
-      unsubscribers = [];
-      set({ ...initialState });
-    },
+    unsubscribers = subscriptions;
+    set({ isDataLoaded: true });
+  },
+  clearSubscribers: () => {
+    unsubscribers.forEach(unsub => unsub());
+    unsubscribers = [];
+    set({ ...initialState });
+  },
+  updateVendaLocally: (id, data) => {
+    set((state) => ({
+      vendas: state.vendas.map((v) =>
+        v.id === id ? { ...v, ...data } : v
+      ),
+    }));
+  },
 }));

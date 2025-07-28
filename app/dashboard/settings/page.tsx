@@ -43,6 +43,7 @@ export default function SettingsPage() {
     const form = useForm<CompanyInfoFormValues>({
         resolver: zodResolver(companyInfoSchema),
         defaultValues: defaultFormValues,
+        mode: "onBlur",
     });
 
     const { formState: { isSubmitting }, reset, getValues, setValue } = form;
@@ -72,8 +73,22 @@ export default function SettingsPage() {
                 if (!cnpjValue) throw new Error("CNPJ inválido.");
                 const data = await fetchCnpjData(cnpjValue);
                 const current = getValues();
-                reset({ ...current, razaoSocial: data.razao_social, nomeFantasia: data.nome_fantasia || "", telefone: data.ddd_telefone_1 || "", email: data.email || "",
-                    endereco: { ...current.endereco, logradouro: data.logradouro, numero: data.numero, bairro: data.bairro, cidade: data.municipio, uf: data.uf, cep: data.cep?.replace(/\D/g, ""), complemento: data.complemento }
+                reset({
+                    ...current,
+                    razaoSocial: data.razao_social,
+                    nomeFantasia: data.nome_fantasia || "",
+                    telefone: data.ddd_telefone_1 || "",
+                    email: data.email || "",
+                    endereco: {
+                        ...current.endereco,
+                        logradouro: data.logradouro,
+                        numero: data.numero,
+                        bairro: data.bairro,
+                        cidade: data.municipio,
+                        uf: data.uf,
+                        cep: data.cep?.replace(/\D/g, ""),
+                        complemento: data.complemento,
+                    }
                 });
             } else {
                 const cepValue = cep?.replace(/\D/g, "");
@@ -98,8 +113,8 @@ export default function SettingsPage() {
             await saveCompanyInfo(values);
             toast.success("Informações da empresa salvas com sucesso!");
             setIsLocked(true);
-        } catch {
-            toast.error("Erro ao salvar as informações.");
+        } catch (e: any) {
+            toast.error(e?.message || "Erro ao salvar as informações.");
         }
     };
 
@@ -112,7 +127,7 @@ export default function SettingsPage() {
             <div className="space-y-6">
                 <FormLockHeader
                     title="Configurações da Empresa"
-                    description="Gerencie os dados cadastrais e fiscais que serão usados em todo o sistema."
+                    description="Gerencie os dados cadastrais e fiscais usados em todo o sistema, inclusive na emissão de NF-e."
                     isLocked={isLocked}
                     onLockToggle={() => setIsLocked(!isLocked)}
                     isSubmitting={isSubmitting}
@@ -125,10 +140,10 @@ export default function SettingsPage() {
                             <Card>
                                 <CardHeader><CardTitle>Dados Gerais</CardTitle></CardHeader>
                                 <CardContent className="space-y-4">
-                                    <FormField name="razaoSocial" render={({ field }) => ( <FormItem><FormLabel>Razão Social</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem> )} />
-                                    <FormField name="nomeFantasia" render={({ field }) => ( <FormItem><FormLabel>Nome Fantasia</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem> )} />
+                                    <FormField name="razaoSocial" render={({ field }) => ( <FormItem><FormLabel>Razão Social *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem> )} />
+                                    <FormField name="nomeFantasia" render={({ field }) => ( <FormItem><FormLabel>Nome Fantasia *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem> )} />
                                     <FormField name="cnpj" render={({ field }) => (
-                                        <FormItem><FormLabel>CNPJ</FormLabel>
+                                        <FormItem><FormLabel>CNPJ *</FormLabel>
                                             <div className="flex items-center gap-2">
                                                 <FormControl><MaskedInput mask="00.000.000/0000-00" {...field} /></FormControl>
                                                 {showCnpjSearch && (<Button type="button" variant="outline" size="icon" onClick={() => handleFetch("cnpj")} disabled={isFetching}><IconSearch className="h-4 w-4" /></Button>)}
@@ -136,8 +151,8 @@ export default function SettingsPage() {
                                         <FormMessage /></FormItem>
                                     )} />
                                     <div className="grid md:grid-cols-2 gap-4">
-                                        <FormField name="telefone" render={({ field }) => ( <FormItem><FormLabel>Telefone</FormLabel><FormControl><MaskedInput mask="(00) 00000-0000" {...field} /></FormControl><FormMessage /></FormItem> )} />
-                                        <FormField name="email" render={({ field }) => ( <FormItem><FormLabel>E-mail</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem> )} />
+                                        <FormField name="telefone" render={({ field }) => ( <FormItem><FormLabel>Telefone *</FormLabel><FormControl><MaskedInput mask="(00) 00000-0000" {...field} /></FormControl><FormMessage /></FormItem> )} />
+                                        <FormField name="email" render={({ field }) => ( <FormItem><FormLabel>E-mail *</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem> )} />
                                     </div>
                                 </CardContent>
                             </Card>
@@ -146,19 +161,19 @@ export default function SettingsPage() {
                                 <CardHeader><CardTitle>Endereço Fiscal</CardTitle></CardHeader>
                                 <CardContent className="space-y-4">
                                     <div className="grid md:grid-cols-[1fr_auto] gap-2 items-end">
-                                        <FormField name="endereco.cep" render={({ field }) => (<FormItem><FormLabel>CEP</FormLabel><FormControl><MaskedInput mask="00000-000" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                        <FormField name="endereco.cep" render={({ field }) => (<FormItem><FormLabel>CEP *</FormLabel><FormControl><MaskedInput mask="00000-000" {...field} /></FormControl><FormMessage /></FormItem>)} />
                                         <Button type="button" variant="outline" onClick={() => handleFetch("cep")} disabled={isFetching || !showCepSearch}>Buscar</Button>
                                     </div>
                                     <div className="grid md:grid-cols-[2fr_1fr] gap-4">
-                                        <FormField name="endereco.logradouro" render={({ field }) => (<FormItem><FormLabel>Logradouro</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                        <FormField name="endereco.numero" render={({ field }) => (<FormItem><FormLabel>Número</FormLabel><FormControl><Input id="endereco.numero" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                        <FormField name="endereco.logradouro" render={({ field }) => (<FormItem><FormLabel>Logradouro *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                        <FormField name="endereco.numero" render={({ field }) => (<FormItem><FormLabel>Número *</FormLabel><FormControl><Input id="endereco.numero" {...field} /></FormControl><FormMessage /></FormItem>)} />
                                     </div>
                                     <FormField name="endereco.complemento" render={({ field }) => (<FormItem><FormLabel>Complemento (Opcional)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                                     <div className="grid md:grid-cols-2 gap-4">
-                                        <FormField name="endereco.bairro" render={({ field }) => (<FormItem><FormLabel>Bairro</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                        <FormField name="endereco.cidade" render={({ field }) => (<FormItem><FormLabel>Cidade</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                        <FormField name="endereco.bairro" render={({ field }) => (<FormItem><FormLabel>Bairro *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                        <FormField name="endereco.cidade" render={({ field }) => (<FormItem><FormLabel>Cidade *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                                     </div>
-                                    <FormField name="endereco.uf" render={({ field }) => (<FormItem><FormLabel>UF</FormLabel><FormControl><Input maxLength={2} {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                    <FormField name="endereco.uf" render={({ field }) => (<FormItem><FormLabel>UF *</FormLabel><FormControl><Input maxLength={2} {...field} /></FormControl><FormMessage /></FormItem>)} />
                                 </CardContent>
                             </Card>
                         </div>
@@ -168,7 +183,7 @@ export default function SettingsPage() {
                                 <CardHeader><CardTitle>Configuração Fiscal</CardTitle></CardHeader>
                                 <CardContent className="space-y-4">
                                     <FormField name="regimeTributario" render={({ field }) => (
-                                        <FormItem><FormLabel>Regime Tributário</FormLabel>
+                                        <FormItem><FormLabel>Regime Tributário *</FormLabel>
                                             <Select onValueChange={field.onChange} value={field.value}>
                                                 <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                                                 <SelectContent>
@@ -178,10 +193,10 @@ export default function SettingsPage() {
                                             </Select>
                                         <FormMessage /></FormItem>
                                     )}/>
-                                    <FormField name="inscricaoEstadual" render={({ field }) => ( <FormItem><FormLabel>Inscrição Estadual</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem> )} />
-                                    <FormField name="configuracaoFiscal.cfop_padrao" render={({ field }) => (<FormItem><FormLabel>CFOP Padrão</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                    <FormField name="configuracaoFiscal.cst_padrao" render={({ field }) => (<FormItem><FormLabel>CST / CSOSN Padrão</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                    <FormField name="configuracaoFiscal.aliquota_icms_padrao" render={({ field }) => (<FormItem><FormLabel>Alíquota ICMS Padrão (%)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                    <FormField name="inscricaoEstadual" render={({ field }) => ( <FormItem><FormLabel>Inscrição Estadual *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem> )} />
+                                    <FormField name="configuracaoFiscal.cfop_padrao" render={({ field }) => (<FormItem><FormLabel>CFOP Padrão *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                    <FormField name="configuracaoFiscal.cst_padrao" render={({ field }) => (<FormItem><FormLabel>CST / CSOSN Padrão *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                    <FormField name="configuracaoFiscal.aliquota_icms_padrao" render={({ field }) => (<FormItem><FormLabel>Alíquota ICMS Padrão (%) *</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
                                     <FormField name="configuracaoFiscal.informacoes_complementares" render={({ field }) => (
                                     <FormItem><FormLabel>Informações Complementares</FormLabel>
                                         <FormControl><Textarea rows={6} placeholder="Mensagem que aparecerá no rodapé da NF-e..." {...field} /></FormControl>

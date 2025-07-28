@@ -16,6 +16,7 @@ import { Cliente, ClienteFormSchema } from "@/lib/schemas";
 
 const clientesCollection = collection(db, "clientes");
 
+// Assinatura dos clientes (com sort e compatível para tela de vendas/NF)
 export const subscribeToClientes = (
   callback: (data: Cliente[]) => void,
   showAll: boolean = false
@@ -24,15 +25,21 @@ export const subscribeToClientes = (
 
   return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
     let data: Cliente[] = [];
-    querySnapshot.forEach((doc) => {
-      data.push({ id: doc.id, ...doc.data() } as Cliente);
+    querySnapshot.forEach((docSnap) => {
+      const raw = docSnap.data();
+      // Garante que createdAt é um Date (ou undefined se não existir)
+      let createdAt: Date | undefined;
+      if (raw.createdAt?.toDate) {
+        createdAt = raw.createdAt.toDate();
+      }
+      data.push({ ...raw, id: docSnap.id, createdAt } as Cliente);
     });
 
     if (showAll) {
       callback(
         data.sort((a, b) => {
-          if (a.status === 'ativo' && b.status === 'inativo') return -1;
-          if (a.status === 'inativo' && b.status === 'ativo') return 1;
+          if (a.status === "ativo" && b.status === "inativo") return -1;
+          if (a.status === "inativo" && b.status === "ativo") return 1;
           return a.nomeRazaoSocial.localeCompare(b.nomeRazaoSocial);
         })
       );
@@ -43,6 +50,7 @@ export const subscribeToClientes = (
   });
 };
 
+// Adiciona novo cliente (pronto para ser usado antes de NF-e)
 export const addCliente = async (
   data: z.infer<typeof ClienteFormSchema>,
   user: { uid: string; displayName: string | null }
@@ -59,6 +67,7 @@ export const addCliente = async (
   return docRef.id;
 };
 
+// Atualiza qualquer campo do cliente, inclusive dados fiscais e endereço
 export const updateCliente = async (
   id: string,
   data: Partial<z.infer<typeof ClienteFormSchema>>
@@ -67,6 +76,7 @@ export const updateCliente = async (
   await updateDoc(docRef, data);
 };
 
+// Muda status ativo/inativo do cliente
 export const setClienteStatus = async (
   id: string,
   status: "ativo" | "inativo"

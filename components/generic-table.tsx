@@ -28,6 +28,7 @@ interface GenericTableProps<TData extends object> {
   renderSubComponent?: (props: { row: Row<TData> }) => React.ReactElement;
   expanded?: ExpandedState;
   onExpandedChange?: OnChangeFn<ExpandedState>;
+  tableControlsComponent?: React.ReactNode; // NOVO: controles extras acima do filtro
 }
 
 export function GenericTable<TData extends object>({
@@ -38,6 +39,7 @@ export function GenericTable<TData extends object>({
   renderSubComponent,
   expanded,
   onExpandedChange,
+  tableControlsComponent, // NOVO
 }: GenericTableProps<TData>) {
   const [globalFilter, setGlobalFilter] = React.useState('');
 
@@ -57,6 +59,13 @@ export function GenericTable<TData extends object>({
 
   return (
     <div>
+      {/* Novo: controles personalizados acima do filtro */}
+      {tableControlsComponent && (
+        <div className="mb-4">
+          {tableControlsComponent}
+        </div>
+      )}
+
       <div className="flex items-center py-4">
         <Input
             placeholder={filterPlaceholder || "Filtrar..."}

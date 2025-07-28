@@ -1,39 +1,67 @@
+// lib/services/vendas.services.ts
 import { db } from "@/lib/firebase";
-import { collection, doc, onSnapshot, QuerySnapshot, DocumentData, updateDoc, query, orderBy, Timestamp, runTransaction, increment, serverTimestamp } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  onSnapshot,
+  QuerySnapshot,
+  DocumentData,
+  updateDoc,
+  query,
+  orderBy,
+  Timestamp,
+  runTransaction,
+  increment,
+  serverTimestamp,
+} from "firebase/firestore";
 import { Venda } from "@/lib/schemas";
 
-export const registrarVenda = async (vendaData: Omit<Venda, 'id' | 'status'>, clienteNome: string) => {
+/**
+ * Registra uma nova venda, baixa estoque e cria movimentação/conta a receber.
+ * Adaptação total para integração com NF-e (e futuras integrações).
+ */
+export const registrarVenda = async (
+  vendaData: Omit<Venda, "id" | "status">,
+  clienteNome: string
+) => {
   try {
     await runTransaction(db, async (transaction) => {
-      // 1. Validação de estoque para todos os produtos da venda
+      // 1. Validação de estoque para todos os produtos
       for (const item of vendaData.produtos) {
         const produtoRef = doc(db, "produtos", item.produtoId);
         const produtoDoc = await transaction.get(produtoRef);
         if (!produtoDoc.exists()) {
-          throw new Error(`Produto "${item.produtoNome}" não encontrado no estoque.`);
+          throw new Error(
+            `Produto "${item.produtoNome}" não encontrado no estoque.`
+          );
         }
         const estoqueAtual = produtoDoc.data().quantidade || 0;
         if (estoqueAtual < item.quantidade) {
-          throw new Error(`Estoque insuficiente para "${item.produtoNome}". Disponível: ${estoqueAtual}`);
+          throw new Error(
+            `Estoque insuficiente para "${item.produtoNome}". Disponível: ${estoqueAtual}`
+          );
         }
       }
 
-      // 2. Cria o registro da Venda
+      // 2. Cria o registro da Venda (status default: Paga/A_Prazo)
       const vendaRef = doc(collection(db, "vendas"));
       transaction.set(vendaRef, {
         ...vendaData,
-        status: vendaData.condicaoPagamento === 'A_VISTA' ? 'Paga' : 'Pendente',
+        status: vendaData.condicaoPagamento === "A_VISTA" ? "Paga" : "Pendente",
         data: Timestamp.fromDate(vendaData.data as Date),
-        dataVencimento: vendaData.dataVencimento ? Timestamp.fromDate(vendaData.dataVencimento as Date) : null,
+        dataVencimento: vendaData.dataVencimento
+          ? Timestamp.fromDate(vendaData.dataVencimento as Date)
+          : null,
+        // nfe: não é setado no registro inicial, apenas na emissão!
       });
 
-      // 3. Dá baixa no estoque e registra a movimentação para cada produto
+      // 3. Baixa no estoque e movimentação
       for (const item of vendaData.produtos) {
         const produtoRef = doc(db, "produtos", item.produtoId);
-        // Usa 'increment' com valor negativo para dar a baixa
-        transaction.update(produtoRef, { quantidade: increment(-item.quantidade) });
+        transaction.update(produtoRef, {
+          quantidade: increment(-item.quantidade),
+        });
 
-        // Cria o registro da movimentação de saída
         const movimentacaoRef = doc(collection(db, "movimentacoesEstoque"));
         transaction.set(movimentacaoRef, {
           produtoId: item.produtoId,
@@ -46,8 +74,8 @@ export const registrarVenda = async (vendaData: Omit<Venda, 'id' | 'status'>, cl
         });
       }
 
-      // 4. Se a venda for "A Prazo", cria a Conta a Receber
-      if (vendaData.condicaoPagamento === 'A_PRAZO') {
+      // 4. Conta a receber se venda a prazo
+      if (vendaData.condicaoPagamento === "A_PRAZO") {
         const contaReceberRef = doc(collection(db, "contasAReceber"));
         transaction.set(contaReceberRef, {
           vendaId: vendaRef.id,
@@ -55,8 +83,10 @@ export const registrarVenda = async (vendaData: Omit<Venda, 'id' | 'status'>, cl
           clienteNome: clienteNome,
           valor: vendaData.valorFinal || vendaData.valorTotal,
           dataEmissao: Timestamp.fromDate(vendaData.data as Date),
-          dataVencimento: Timestamp.fromDate(vendaData.dataVencimento as Date),
-          status: 'Pendente',
+          dataVencimento: Timestamp.fromDate(
+            vendaData.dataVencimento as Date
+          ),
+          status: "Pendente",
         });
       }
     });
@@ -66,40 +96,66 @@ export const registrarVenda = async (vendaData: Omit<Venda, 'id' | 'status'>, cl
   }
 };
 
+/**
+ * Assinatura em tempo real para vendas
+ * - Inclui data e dataVencimento convertidas para Date.
+ * - O campo nfe será lido corretamente (se presente).
+ */
 export const subscribeToVendas = (callback: (vendas: Venda[]) => void) => {
   const q = query(collection(db, "vendas"), orderBy("data", "desc"));
   return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
     const vendas: Venda[] = [];
     querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        vendas.push({
-            ...data,
-            id: doc.id,
-            data: data.data.toDate(),
-            dataVencimento: data.dataVencimento?.toDate(),
-        } as Venda);
+      const data = doc.data();
+      vendas.push({
+        ...data,
+        id: doc.id,
+        data: data.data.toDate(),
+        dataVencimento: data.dataVencimento?.toDate(),
+        // nfe: já vem do Firestore se existir!
+      } as Venda);
     });
     callback(vendas);
   });
 };
 
-export const updateVendaStatus = async (id: string, status: 'Paga' | 'Pendente') => {
+/**
+ * Atualiza status da venda ('Paga' ou 'Pendente')
+ */
+export const updateVendaStatus = async (
+  id: string,
+  status: "Paga" | "Pendente"
+) => {
   const vendaDoc = doc(db, "vendas", id);
   await updateDoc(vendaDoc, { status });
 };
 
-export const updateVenda = async (id: string, vendaData: Partial<Omit<Venda, 'id'>>) => {
-    const vendaDocRef = doc(db, "vendas", id);
-    const dataToUpdate: { [key: string]: any } = { ...vendaData };
+/**
+ * Atualiza qualquer campo da venda, inclusive o objeto 'nfe'.
+ * - Usado para salvar dados da NF-e retornados pela API de emissão.
+ */
+export const updateVenda = async (
+  id: string,
+  vendaData: Partial<Omit<Venda, "id">>
+) => {
+  const vendaDocRef = doc(db, "vendas", id);
+  const dataToUpdate: { [key: string]: any } = { ...vendaData };
 
-    if (vendaData.data) {
-        dataToUpdate.data = Timestamp.fromDate(vendaData.data as Date);
-    }
-    if (vendaData.dataVencimento) {
-        dataToUpdate.dataVencimento = Timestamp.fromDate(vendaData.dataVencimento as Date);
-    } else if (vendaData.hasOwnProperty('dataVencimento')) {
-        dataToUpdate.dataVencimento = null;
-    }
+  if (vendaData.data) {
+    dataToUpdate.data = Timestamp.fromDate(vendaData.data as Date);
+  }
+  if (vendaData.dataVencimento) {
+    dataToUpdate.dataVencimento = Timestamp.fromDate(
+      vendaData.dataVencimento as Date
+    );
+  } else if (vendaData.hasOwnProperty("dataVencimento")) {
+    dataToUpdate.dataVencimento = null;
+  }
 
-    await updateDoc(vendaDocRef, dataToUpdate);
-}
+  // Permite atualizar/definir o campo 'nfe' de forma segura
+  if (vendaData.nfe !== undefined) {
+    dataToUpdate.nfe = vendaData.nfe;
+  }
+
+  await updateDoc(vendaDocRef, dataToUpdate);
+};
